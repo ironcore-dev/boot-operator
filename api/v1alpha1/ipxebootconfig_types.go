@@ -17,6 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"net"
+
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -27,15 +30,28 @@ import (
 type IPXEBootConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of IPXEBootConfig. Edit ipxebootconfig_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Image       string                      `json:"image,omitempty"`
+	SystemUUID  string                      `json:"systemUuid,omitempty"`
+	SystemIP    net.IP                      `json:"systemIP,omitempty"` // TODO: Add the custom serialization. For now validate at the controller.
+	IgnitionRef corev1.LocalObjectReference `json:"ignitionRef,omitempty"`
 }
+
+type IPXEConfigState string
+
+const (
+	IPXEConfigStateReady   IPXEConfigState = "Ready"
+	IPXEConfigStatePending IPXEConfigState = "Pending"
+	IPXEConfigStateError   IPXEConfigState = "Error"
+)
 
 // IPXEBootConfigStatus defines the observed state of IPXEBootConfig
 type IPXEBootConfigStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	KernelURL   string          `json:"kernelUrl,omitempty"`
+	InitrdURL   string          `json:"initrdUrl,omitempty"`
+	SquashfsURL string          `json:"squashfsURL,omitempty"`
+	State       IPXEConfigState `json:"state,omitempty"`
 }
 
 //+kubebuilder:object:root=true
