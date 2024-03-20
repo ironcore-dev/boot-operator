@@ -39,13 +39,83 @@ spec:
           spec:
             description: IPXEBootConfigSpec defines the desired state of IPXEBootConfig
             properties:
-              foo:
-                description: Foo is an example field of IPXEBootConfig. Edit ipxebootconfig_types.go
-                  to remove/update
+              bootScriptRef:
+                description: |-
+                  LocalObjectReference contains enough information to let you locate the
+                  referenced object inside the same namespace.
+                properties:
+                  name:
+                    description: |-
+                      Name of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              bootScriptTemplateRef:
+                description: |-
+                  LocalObjectReference contains enough information to let you locate the
+                  referenced object inside the same namespace.
+                properties:
+                  name:
+                    description: |-
+                      Name of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              ignitionRef:
+                description: |-
+                  LocalObjectReference contains enough information to let you locate the
+                  referenced object inside the same namespace.
+                properties:
+                  name:
+                    description: |-
+                      Name of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              image:
+                type: string
+              initrdUrl:
+                type: string
+              kernelUrl:
+                description: 'TODO: Handle this later may be, and remove it otherwise
+                  in the first version.'
+                type: string
+              squashfsURL:
+                type: string
+              systemIP:
+                description: |-
+                  An IP is a single IP address, a slice of bytes.
+                  Functions in this package accept either 4-byte (IPv4)
+                  or 16-byte (IPv6) slices as input.
+
+
+                  Note that in this documentation, referring to an
+                  IP address as an IPv4 address or an IPv6 address
+                  is a semantic property of the address, not just the
+                  length of the byte slice: a 16-byte slice can still
+                  be an IPv4 address.
+                format: byte
+                type: string
+              systemUuid:
+                description: |-
+                  INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file
                 type: string
             type: object
           status:
             description: IPXEBootConfigStatus defines the observed state of IPXEBootConfig
+            properties:
+              state:
+                description: |-
+                  INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+                  Important: Run "make" to regenerate code after modifying this file
+                type: string
             type: object
         type: object
     served: true

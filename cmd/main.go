@@ -144,7 +144,7 @@ func main() {
 	}
 
 	setupLog.Info("starting ipxe-server")
-	go ipxeserver.StartServer(ipxeServerAddr)
+	go ipxeserver.RunServer(ipxeServerAddr)
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

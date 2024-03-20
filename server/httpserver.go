@@ -5,11 +5,11 @@ import (
 	"net/http"
 )
 
-func StartServer(ipxeServerAddr string) {
+func RunServer(ipxeServerAddr string) {
 	http.HandleFunc("/ipxe", handleIPXE)
 	http.HandleFunc("/ignition", handleIgnition)
 
-	// TODO: User Logger
+	// TODO: Use Logger
 	fmt.Println("Starting server on port", ipxeServerAddr)
 	if err := http.ListenAndServe(ipxeServerAddr, nil); err != nil {
 		panic(err)

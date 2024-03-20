@@ -30,10 +30,17 @@ import (
 type IPXEBootConfigSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Image       string                      `json:"image,omitempty"`
-	SystemUUID  string                      `json:"systemUuid,omitempty"`
-	SystemIP    net.IP                      `json:"systemIP,omitempty"` // TODO: Add the custom serialization. For now validate at the controller.
-	IgnitionRef corev1.LocalObjectReference `json:"ignitionRef,omitempty"`
+	SystemUUID            string                       `json:"systemUuid,omitempty"`
+	SystemIP              net.IP                       `json:"systemIP,omitempty"` // TODO: Add the custom serialization. For now validate at the controller.
+	Image                 string                       `json:"image,omitempty"`
+	IgnitionRef           *corev1.LocalObjectReference `json:"ignitionRef,omitempty"`
+	BootScriptRef         *corev1.LocalObjectReference `json:"bootScriptRef,omitempty"`
+	BootScriptTemplateRef *corev1.LocalObjectReference `json:"bootScriptTemplateRef,omitempty"`
+
+	// TODO: Handle this later may be, and remove it otherwise in the first version.
+	KernelURL   string `json:"kernelUrl,omitempty"`
+	InitrdURL   string `json:"initrdUrl,omitempty"`
+	SquashfsURL string `json:"squashfsURL,omitempty"`
 }
 
 type IPXEConfigState string
@@ -44,14 +51,13 @@ const (
 	IPXEConfigStateError   IPXEConfigState = "Error"
 )
 
+const DefaultIgnitionKey = "ignition"
+
 // IPXEBootConfigStatus defines the observed state of IPXEBootConfig
 type IPXEBootConfigStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	KernelURL   string          `json:"kernelUrl,omitempty"`
-	InitrdURL   string          `json:"initrdUrl,omitempty"`
-	SquashfsURL string          `json:"squashfsURL,omitempty"`
-	State       IPXEConfigState `json:"state,omitempty"`
+	State IPXEConfigState `json:"state,omitempty"`
 }
 
 //+kubebuilder:object:root=true
