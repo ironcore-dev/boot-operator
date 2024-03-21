@@ -60,6 +60,8 @@ func init() {
 }
 
 func main() {
+	ctx := ctrl.LoggerInto(ctrl.SetupSignalHandler(), setupLog)
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
@@ -150,7 +152,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := indexIPXEBootConfigBySystemUUID(mgr); err != nil {
+	if err := indexIPXEBootConfigBySystemUUID(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to set up indexer for IPXEBootConfig SystemUUID")
 		os.Exit(1)
 	}
@@ -159,15 +161,15 @@ func main() {
 	go ipxeserver.RunServer(ipxeServerAddr, mgr.GetClient(), serverLog.WithName("ipxeserver"))
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
 }
 
-func indexIPXEBootConfigBySystemUUID(mgr ctrl.Manager) error {
-	return mgr.GetFieldIndexer().IndexField(context.Background(), &bootv1alpha1.IPXEBootConfig{}, systemUuidIndexKey, func(rawObj client.Object) []string {
-		ipxeBootConfig := rawObj.(*bootv1alpha1.IPXEBootConfig)
+func indexIPXEBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) error {
+	return mgr.GetFieldIndexer().IndexField(ctx, &bootv1alpha1.IPXEBootConfig{}, systemUuidIndexKey, func(Obj client.Object) []string {
+		ipxeBootConfig := Obj.(*bootv1alpha1.IPXEBootConfig)
 		return []string{ipxeBootConfig.Spec.SystemUUID}
 	})
 }

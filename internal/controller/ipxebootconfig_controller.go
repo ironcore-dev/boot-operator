@@ -21,15 +21,19 @@ import (
 	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/controller-utils/clientutils"
 	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -136,9 +140,19 @@ func (r *IPXEBootConfigReconciler) delete(_ context.Context, log logr.Logger, ip
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *IPXEBootConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// return ctrl.NewControllerManagedBy(mgr).
+	// 	For(&bootv1alpha1.IPXEBootConfig{}).
+	// 	// Complete(r)
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&bootv1alpha1.IPXEBootConfig{}).
+		Watches(
+			&v1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueIPXEBootConfigReferencingIgnitionSecret),
+			//r.enqueueIPXEBootConfigReferencingIgnitionSecret(ctx, log),
+		).
 		Complete(r)
+
 }
 
 func (r *IPXEBootConfigReconciler) patchStatus(
@@ -153,4 +167,32 @@ func (r *IPXEBootConfigReconciler) patchStatus(
 		return fmt.Errorf("error patching ipxeBootConfig: %w", err)
 	}
 	return nil
+}
+
+func (r *IPXEBootConfigReconciler) enqueueIPXEBootConfigReferencingIgnitionSecret(ctx context.Context, secret client.Object) []reconcile.Request {
+	log := log.Log.WithValues("secret", secret.GetName())
+	secretObj, ok := secret.(*corev1.Secret)
+	if !ok {
+		log.Error(nil, "cant decode object into Secret", secret)
+		return nil
+	}
+
+	list := &bootv1alpha1.IPXEBootConfigList{}
+	if err := r.Client.List(ctx, list, client.InNamespace(secretObj.Namespace)); err != nil {
+		log.Error(err, "failed to list IPXEBootConfig for secret", secret)
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, ipxeBootConfig := range list.Items {
+		if ipxeBootConfig.Spec.IgnitionSecretRef != nil && ipxeBootConfig.Spec.IgnitionSecretRef.Name == secretObj.Name {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      ipxeBootConfig.Name,
+					Namespace: ipxeBootConfig.Namespace,
+				},
+			})
+		}
+	}
+	return requests
 }

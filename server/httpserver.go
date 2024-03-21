@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"path"
 
@@ -31,8 +30,8 @@ func RunServer(ipxeServerAddr string, k8sClient client.Client, log logr.Logger) 
 func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger) {
 	log.Info("Processing IPXE request", "method", r.Method, "path", r.URL.Path)
 
-	// Implement your handler logic here
-	fmt.Println("Dummy ipxe-script ..")
+	// TODO: Implement your handler logic here
+	log.Info("Dummy ipxe-script")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("IPXE handler response"))
 }
@@ -51,13 +50,13 @@ func handleIgnition(w http.ResponseWriter, r *http.Request, k8sClient client.Cli
 	ipxeBootConfigList := &bootv1alpha1.IPXEBootConfigList{}
 	if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{"spec.systemUuid": uuid}); err != nil {
 		http.Error(w, "Failed to find IPXEBootConfig", http.StatusNotFound)
-		log.Error(err, "failed to find IPXEBootConfig")
+		log.Info("Failed to find IPXEBootConfig", "error", err.Error())
 		return
 	}
 
 	if len(ipxeBootConfigList.Items) == 0 {
 		http.Error(w, "No IPXEBootConfig found with given UUID", http.StatusNotFound)
-		log.Error(nil, "no IPXEBootConfig found with given UUID ")
+		log.Info("No IPXEBootConfig found with given UUID")
 		return
 	}
 
@@ -67,14 +66,14 @@ func handleIgnition(w http.ResponseWriter, r *http.Request, k8sClient client.Cli
 	ignitionSecret := &corev1.Secret{}
 	if err := k8sClient.Get(ctx, client.ObjectKey{Name: ipxeBootConfig.Spec.IgnitionSecretRef.Name, Namespace: ipxeBootConfig.Namespace}, ignitionSecret); err != nil {
 		http.Error(w, "Failed to get Ignition secret", http.StatusNotFound)
-		log.Error(err, "failed to get Ignition secret")
+		log.Info("Failed to get Ignition secret", "error", err.Error())
 		return
 	}
 
 	ignitionData, ok := ignitionSecret.Data[bootv1alpha1.DefaultIgnitionKey]
 	if !ok {
 		http.Error(w, "Ignition data not found in secret", http.StatusNotFound)
-		log.Error(nil, "ignition data not found in secret")
+		log.Info("Ignition data not found in secret")
 		return
 	}
 
