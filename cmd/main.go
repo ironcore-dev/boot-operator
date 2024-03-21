@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"os"
@@ -29,6 +30,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -41,8 +43,13 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme    = runtime.NewScheme()
+	setupLog  = ctrl.Log.WithName("setup")
+	serverLog = zap.New(zap.UseDevMode(true))
+)
+
+const (
+	systemUuidIndexKey = "spec.systemUuid"
 )
 
 func init() {
@@ -143,12 +150,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := indexIPXEBootConfigBySystemUUID(mgr); err != nil {
+		setupLog.Error(err, "unable to set up indexer for IPXEBootConfig SystemUUID")
+		os.Exit(1)
+	}
+
 	setupLog.Info("starting ipxe-server")
-	go ipxeserver.RunServer(ipxeServerAddr)
+	go ipxeserver.RunServer(ipxeServerAddr, mgr.GetClient(), serverLog.WithName("ipxeserver"))
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+func indexIPXEBootConfigBySystemUUID(mgr ctrl.Manager) error {
+	return mgr.GetFieldIndexer().IndexField(context.Background(), &bootv1alpha1.IPXEBootConfig{}, systemUuidIndexKey, func(rawObj client.Object) []string {
+		ipxeBootConfig := rawObj.(*bootv1alpha1.IPXEBootConfig)
+		return []string{ipxeBootConfig.Spec.SystemUUID}
+	})
 }

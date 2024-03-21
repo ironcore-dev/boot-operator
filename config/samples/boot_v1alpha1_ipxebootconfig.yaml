@@ -9,4 +9,7 @@ metadata:
     app.kubernetes.io/created-by: ipxe-operator
   name: ipxebootconfig-sample
 spec:
-  # TODO(user): Add fields here
+  systemUuid: "1234"
+  systemIP: 1.2.3.4
+  ignitionSecretRef:
+    name: sample-ignition

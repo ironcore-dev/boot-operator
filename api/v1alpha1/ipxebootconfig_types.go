@@ -17,8 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"net"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -28,27 +26,19 @@ import (
 
 // IPXEBootConfigSpec defines the desired state of IPXEBootConfig
 type IPXEBootConfigSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	SystemUUID            string                       `json:"systemUuid,omitempty"`
-	SystemIP              net.IP                       `json:"systemIP,omitempty"` // TODO: Add the custom serialization. For now validate at the controller.
-	Image                 string                       `json:"image,omitempty"`
-	IgnitionRef           *corev1.LocalObjectReference `json:"ignitionRef,omitempty"`
-	BootScriptRef         *corev1.LocalObjectReference `json:"bootScriptRef,omitempty"`
-	BootScriptTemplateRef *corev1.LocalObjectReference `json:"bootScriptTemplateRef,omitempty"`
-
-	// TODO: Handle this later may be, and remove it otherwise in the first version.
-	KernelURL   string `json:"kernelUrl,omitempty"`
-	InitrdURL   string `json:"initrdUrl,omitempty"`
-	SquashfsURL string `json:"squashfsURL,omitempty"`
+	SystemUUID        string                       `json:"systemUuid,omitempty"`
+	SystemIP          string                       `json:"systemIP,omitempty"` // TODO: Add the custom serialization. For now validate at the controller.
+	Image             string                       `json:"image,omitempty"`
+	IgnitionSecretRef *corev1.LocalObjectReference `json:"ignitionSecretRef,omitempty"`
 }
 
-type IPXEConfigState string
+type IPXEBootConfigState string
 
 const (
-	IPXEConfigStateReady   IPXEConfigState = "Ready"
-	IPXEConfigStatePending IPXEConfigState = "Pending"
-	IPXEConfigStateError   IPXEConfigState = "Error"
+	IPXEBootConfigStateReady   IPXEBootConfigState = "Ready"
+	IPXEBootConfigStatePending IPXEBootConfigState = "Pending"
+	IPXEBootConfigStateError   IPXEBootConfigState = "Error"
 )
 
 const DefaultIgnitionKey = "ignition"
@@ -57,11 +47,14 @@ const DefaultIgnitionKey = "ignition"
 type IPXEBootConfigStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	State IPXEConfigState `json:"state,omitempty"`
+	State IPXEBootConfigState `json:"state,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="State",type=string,JSONPath=`.status.state`
+//+kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +genclient
 
 // IPXEBootConfig is the Schema for the ipxebootconfigs API
 type IPXEBootConfig struct {
