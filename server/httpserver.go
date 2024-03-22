@@ -87,8 +87,6 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 	}
 
 	log.Info("Successfully generated iPXE script", "clientIP", clientIP)
-
-	w.WriteHeader(http.StatusOK)
 	w.Write(nil)
 }
 

@@ -24,13 +24,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
-	"github.com/ironcore-dev/controller-utils/clientutils"
 	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -53,7 +51,7 @@ func (r *IPXEBootConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	log := log.FromContext(ctx)
 	IPXEBootConfig := &bootv1alpha1.IPXEBootConfig{}
 	if err := r.Get(ctx, req.NamespacedName, IPXEBootConfig); err != nil {
-		return ctrl.Result{}, fmt.Errorf("error getting the IPXEBootConfig %w", err)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	return r.reconcileExists(ctx, log, IPXEBootConfig)
@@ -68,12 +66,6 @@ func (r *IPXEBootConfigReconciler) reconcileExists(ctx context.Context, log logr
 }
 
 func (r *IPXEBootConfigReconciler) reconcile(ctx context.Context, log logr.Logger, ipxeBootConfig *bootv1alpha1.IPXEBootConfig) (ctrl.Result, error) {
-
-	log.V(1).Info("Ensuring finalizer")
-	if requeue, err := clientutils.PatchEnsureFinalizer(ctx, r.Client, ipxeBootConfig, finalizer); err != nil || requeue {
-		return ctrl.Result{Requeue: requeue}, err
-	}
-
 	log.V(1).Info("Ensuring Ignition")
 	state, err := r.ensureIgnition(ctx, log, ipxeBootConfig)
 	if err != nil {
@@ -84,13 +76,9 @@ func (r *IPXEBootConfigReconciler) reconcile(ctx context.Context, log logr.Logge
 		return ctrl.Result{}, fmt.Errorf("failed to ensure the Ignition %w", err)
 	}
 
-	log.V(1).Info("Ensuring Boot Script")
-	// TODO: Add logic for ensure Ipxe Script is created properly.
-
 	// TODO: Add simple validation for the Spec.*URLs here.
 
-	// Patch status with Ready.
-	err = r.patchStatus(ctx, ipxeBootConfig, bootv1alpha1.IPXEBootConfigStateReady)
+	err = r.patchStatus(ctx, ipxeBootConfig, state)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to patch status %w", err)
 	}
@@ -99,12 +87,11 @@ func (r *IPXEBootConfigReconciler) reconcile(ctx context.Context, log logr.Logge
 }
 
 func (r *IPXEBootConfigReconciler) ensureIgnition(ctx context.Context, _ logr.Logger, ipxeBootConfig *bootv1alpha1.IPXEBootConfig) (bootv1alpha1.IPXEBootConfigState, error) {
-
 	// Verify if the IgnitionRef is set, and it has the intended data key.
 	if ipxeBootConfig.Spec.IgnitionSecretRef != nil {
 		IgnitionSecret := &corev1.Secret{}
 		if err := r.Get(ctx, client.ObjectKey{Name: ipxeBootConfig.Spec.IgnitionSecretRef.Name, Namespace: ipxeBootConfig.Namespace}, IgnitionSecret); err != nil {
-			return bootv1alpha1.IPXEBootConfigStateError, fmt.Errorf("error getting the Ignition Secret")
+			return bootv1alpha1.IPXEBootConfigStateError, client.IgnoreNotFound(err)
 			// TODO: Add some validation steps to ensure that the IgntionData is compliant, if necessary.
 			// Assume for now, that it's going to json format.
 		}
@@ -119,16 +106,7 @@ func (r *IPXEBootConfigReconciler) ensureIgnition(ctx context.Context, _ logr.Lo
 func (r *IPXEBootConfigReconciler) delete(_ context.Context, log logr.Logger, ipxeBootConfig *bootv1alpha1.IPXEBootConfig) (ctrl.Result, error) {
 	log.V(1).Info("Deleting ipxeBootConfig")
 
-	if !controllerutil.ContainsFinalizer(ipxeBootConfig, finalizer) {
-		log.V(1).Info("No finalizer present, nothing to do")
-		return ctrl.Result{}, nil
-	}
-
-	log.V(1).Info("Finalizer present, doing cleanup")
-	if controllerutil.RemoveFinalizer(ipxeBootConfig, finalizer) {
-		// TODO: Check whether there are any dependent resources to be cleaned.
-		log.V(1).Info("Removed finalizer")
-	}
+	// TODO
 
 	return ctrl.Result{}, nil
 }
