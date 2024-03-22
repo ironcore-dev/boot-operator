@@ -27,9 +27,12 @@ import (
 // IPXEBootConfigSpec defines the desired state of IPXEBootConfig
 type IPXEBootConfigSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	SystemUUID        string                       `json:"systemUuid,omitempty"`
+	SystemUUID        string                       `json:"systemUUID,omitempty"`
 	SystemIP          string                       `json:"systemIP,omitempty"` // TODO: Add the custom serialization. For now validate at the controller.
 	Image             string                       `json:"image,omitempty"`
+	KernelURL         string                       `json:"kernelURL,omitempty"`
+	InitrdURL         string                       `json:"initrdURL,omitempty"`
+	SquashfsURL       string                       `json:"squashfsURL,omitempty"`
 	IgnitionSecretRef *corev1.LocalObjectReference `json:"ignitionSecretRef,omitempty"`
 }
 

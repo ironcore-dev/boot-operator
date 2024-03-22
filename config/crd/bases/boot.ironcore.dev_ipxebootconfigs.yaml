@@ -61,9 +61,15 @@ spec:
                 x-kubernetes-map-type: atomic
               image:
                 type: string
+              initrdURL:
+                type: string
+              kernelURL:
+                type: string
+              squashfsURL:
+                type: string
               systemIP:
                 type: string
-              systemUuid:
+              systemUUID:
                 description: 'Important: Run "make" to regenerate code after modifying
                   this file'
                 type: string

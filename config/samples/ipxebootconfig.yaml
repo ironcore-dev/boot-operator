@@ -9,7 +9,11 @@ metadata:
     app.kubernetes.io/created-by: ipxe-operator
   name: ipxebootconfig-sample
 spec:
-  systemUuid: "1234"
-  systemIP: 1.2.3.4
+  systemUUID: "1234"
+  systemIP: "10.0.0.2" 
   ignitionSecretRef:
-    name: sample-ignition
+    name: ignition-sample
+  image: gardenlinux:latest
+  kernelURL: "10.0.0.1/ipxe/rootfs.vmlinuz"
+  initrdURL: "10.0.0.1/ipxe/rootfs.initrd"
+  squashfsURL: "10.0.0.1/ipxe/root.squashfs"
