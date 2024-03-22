@@ -1,0 +1,26 @@
+version: 2
+updates:
+- package-ecosystem: gomod
+  directory: "/"
+  schedule:
+    interval: daily
+  commit-message:
+    prefix: ""
+  reviewers:
+  - hardikdr
+- package-ecosystem: github-actions
+  directory: "/"
+  schedule:
+    interval: daily
+  commit-message:
+    prefix: ""
+  reviewers:
+  - hardikdr
+- package-ecosystem: docker
+  directory: "/"
+  schedule:
+    interval: daily
+  commit-message:
+    prefix: ""
+  reviewers:
+  - hardikdr

@@ -1,0 +1,70 @@
+name: Build and publish Docker image
+
+env:
+  platforms: linux/amd64,linux/arm64
+
+on:
+  push:
+    branches:
+    - main
+    tags:
+    - v*
+  pull_request:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish-docker:
+    name: Build and publish Docker image
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+    - name: Collect metadata
+      uses: docker/metadata-action@v5
+      id: meta
+      with:
+        images: |
+          ghcr.io/${{ github.repository_owner }}/ipxe-operator
+        tags: |
+          type=semver,pattern={{version}}
+          type=schedule
+          type=ref,event=branch
+          type=ref,event=tag
+          type=ref,event=pr
+          type=sha
+        flavor: |
+          latest=${{ github.ref == 'refs/heads/main' }}
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        image: tonistiigi/binfmt:latest
+        platforms: ${{ env.platforms }}
+    - name: Set up Docker Buildx context
+      run: |
+        docker context create builders
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      timeout-minutes: 5
+      with:
+        version: latest
+        endpoint: builders
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      timeout-minutes: 60
+      with:
+        context: .
+        platforms: ${{ env.platforms }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        push: true
