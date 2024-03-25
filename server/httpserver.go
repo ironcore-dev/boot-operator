@@ -87,7 +87,13 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 	}
 
 	log.Info("Successfully generated iPXE script", "clientIP", clientIP)
-	w.Write(nil)
+
+	_, err = w.Write(nil)
+	if err != nil {
+		log.Info("Failed to write the ipxe http response", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 }
 
 func handleIgnition(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger) {
@@ -132,5 +138,10 @@ func handleIgnition(w http.ResponseWriter, r *http.Request, k8sClient client.Cli
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write(ignitionData)
+	_, err := w.Write(ignitionData)
+	if err != nil {
+		log.Info("Failed to write the ignition http response", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 }
