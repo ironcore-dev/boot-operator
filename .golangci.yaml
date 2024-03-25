@@ -16,6 +16,10 @@ issues:
       linters:
         - dupl
         - lll
+    - path: "server/*"
+      linters:
+        - dupl
+        - lll
 linters:
   disable-all: true
   enable:

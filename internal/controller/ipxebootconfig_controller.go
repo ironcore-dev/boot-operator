@@ -33,10 +33,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-const (
-	finalizer = "ipxe-operator.boot.ironcore.dev/ipxebootconfig"
-)
-
 // IPXEBootConfigReconciler reconciles a IPXEBootConfig object
 type IPXEBootConfigReconciler struct {
 	client.Client
