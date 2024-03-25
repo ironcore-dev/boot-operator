@@ -19,7 +19,7 @@ go.work
 
 # Kubernetes Generated files - skip generated files, except for vendored files
 !vendor/**/zz_generated.*
-vendor
+vendor/
 
 # editor and IDE paraphernalia
 .idea
