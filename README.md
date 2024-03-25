@@ -1,5 +1,10 @@
 # ipxe-operator
 
+[![REUSE status](https://api.reuse.software/badge/github.com/ironcore-dev/ipxe-operator)](https://api.reuse.software/info/github.com/ironcore-dev/ipxe-operator)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ironcore-dev/ipxe-operator)](https://goreportcard.com/report/github.com/ironcore-dev/ipxe-operator)
+[![GitHub License](https://img.shields.io/static/v1?label=License&message=Apache-2.0&color=blue)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com)
+
 The iPXE Operator is a Kubernetes controller designed to streamline the management of iPXE infrastructure within Kubernetes environments. This operator simplifies network booting processes by automating iPXE script generation and ignition content delivery based on Kubernetes Custom Resource Definitions (CRDs).
 
 ## Key Components

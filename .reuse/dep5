@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: ipxe-operator
 Upstream-Contact: IronCore authors <ospo@sap.com>
-Source: https://github.com/ironcore-dev/ironcore
+Source: https://github.com/ironcore-dev/ipxe-operator
 
 # --------------------------------------------------
 # source code
@@ -13,7 +13,6 @@ Files:
   Dockerfile
   Makefile
   PROJECT
-  client-go/openapi/api_violations.report
   config/*
   gen/*
   go.mod
@@ -23,9 +22,6 @@ Files:
   templates/*
   internal/*
   cmd/*
-  mkdocs.yml
-  models-schema/main.go.tmpl
-  poollet/machinepoollet/addresses/testdata/addresses.yaml
   api/*
   config/*
   test/*
@@ -33,7 +29,7 @@ Files:
   PROJECT
   .dockerignore
   .golangci.yaml
-Copyright: 2023 SAP SE or an SAP affiliate company and IronCore contributors
+Copyright: 2024 SAP SE or an SAP affiliate company and IronCore contributors
 License: Apache-2.0
 
 # --------------------------------------------------
@@ -42,5 +38,5 @@ License: Apache-2.0
 Files:
   docs/*
   README.md
-Copyright: 2023 SAP SE or an SAP affiliate company and IronCore contributors
+Copyright: 2024 SAP SE or an SAP affiliate company and IronCore contributors
 License: Apache-2.0
