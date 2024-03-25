@@ -1,7 +1,7 @@
 name: Build and publish Docker image
 
 env:
-  platforms: linux/amd64,linux/arm64
+  platforms: linux/amd64
 
 on:
   push:
