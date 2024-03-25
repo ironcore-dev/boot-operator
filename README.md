@@ -1,8 +1,19 @@
 # ipxe-operator
-// TODO(user): Add simple overview of use/purpose
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+The iPXE Operator is a Kubernetes controller designed to streamline the management of iPXE infrastructure within Kubernetes environments. This operator simplifies network booting processes by automating iPXE script generation and ignition content delivery based on Kubernetes Custom Resource Definitions (CRDs).
+
+## Key Components
+- __IPXE HTTP Server__: Serves dynamic iPXE scripts and ignition content through HTTP endpoints, tailored to individual machine specifications.
+
+- __Reconciler__: Configures the IPXE HTTP Server based on the desired state specified in `IPXEBootConfiguration` CRDs, ensuring the server's configuration aligns with cluster resources.
+
+- __Translator (Optional)__: Converts `BootConfiguration` CustomResources from MetalAPI provided by `Ironcore` into the format expected by the iPXE Operator, enhancing integration capabilities.
+
+
+## HTTP Server Endpoints
+- `/ignition/{UUID}`: Matches an `IPXEBootConfiguration` using the provided `{UUID}` (Spec.systemUUID) and serves the associated ignition content.
+
+- `/ipxe`: Identifies the corresponding `IPXEBootConfiguration` based on the requester's system IP (Spec.SystemIP). It then renders the `templates/ipxe-script.tpl` with values from the CRD (e.g., KernelURL, InitrdURL, SquashfsURL) and returns the customized iPXE script.
 
 ## Getting Started
 
@@ -89,12 +100,26 @@ Users can just run kubectl apply -f <URL for YAML BUNDLE> to install the project
 kubectl apply -f https://raw.githubusercontent.com/<org>/ipxe-operator/<tag or branch>/dist/install.yaml
 ```
 
-## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
-
 **NOTE:** Run `make help` for more information on all potential `make` targets
 
 More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+
+
+## Roadmap
+Looking ahead, the iPXE Operator aims to introduce a range of enhancements to further empower Kubernetes-driven infrastructure provisioning:
+
+- Configurable iPXE Scripts: Enable customization of iPXE script templates to accommodate diverse booting requirements.
+
+- Custom Image Registry Support: Dynamically generate URLs for the kernel, initrd, and squashfs images from a specified image registry, facilitating streamlined updates and deployments.
+
+- Expanded Endpoints: Introduce additional endpoints, such as `/ztp` for Zero Touch Provisioning of switches and `/certs` for certificate management, broadening the operator's utility.
+
+- Enhanced Indexing: Implement indexing based on MAC addresses in addition to the existing SystemUUID and SystemIP, offering more granular control and identification of network boot targets.
+
+
+## Contributing
+
+We'd love to get feedback from you. Please report bugs, suggestions or post questions by opening a GitHub issue.
 
 ## License
 
