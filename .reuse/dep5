@@ -13,7 +13,6 @@ Files:
   Dockerfile
   Makefile
   PROJECT
-  client-go/openapi/api_violations.report
   config/*
   gen/*
   go.mod
@@ -23,9 +22,6 @@ Files:
   templates/*
   internal/*
   cmd/*
-  mkdocs.yml
-  models-schema/main.go.tmpl
-  poollet/machinepoollet/addresses/testdata/addresses.yaml
   api/*
   config/*
   test/*
