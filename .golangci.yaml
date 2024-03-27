@@ -23,22 +23,9 @@ issues:
 linters:
   disable-all: true
   enable:
-    - dupl
-    - errcheck
-    - exportloopref
-    - goconst
-    - gocyclo
-    - gofmt
-    - goimports
-    - gosimple
-    - govet
+    - ginkgolinter
     - ineffassign
-    - lll
     - misspell
-    - nakedret
-    - prealloc
-    - staticcheck
-    - typecheck
-    - unconvert
-    - unparam
+    - goimports
+    - importas
     - unused
