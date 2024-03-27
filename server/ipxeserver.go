@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2024 SAP SE or an SAP affiliate company and IronCore contributors
+// SPDX-License-Identifier: Apache-2.0
+
 package server
 
 import (
@@ -13,7 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// IPXEData is the struct that will hold our template variables.
 type IPXETemplateData struct {
 	KernelURL     string
 	InitrdURL     string
@@ -22,7 +24,7 @@ type IPXETemplateData struct {
 	IpxeServerURL string
 }
 
-func RunServer(ipxeServerAddr string, k8sClient client.Client, log logr.Logger) {
+func RunIPXEServer(ipxeServerAddr string, k8sClient client.Client, log logr.Logger) {
 	http.HandleFunc("/ipxe", func(w http.ResponseWriter, r *http.Request) {
 		handleIPXE(w, r, k8sClient, ipxeServerAddr, log)
 	})

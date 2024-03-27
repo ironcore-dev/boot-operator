@@ -69,9 +69,11 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var ipxeServerAddr string
+	var imageProxyServerAddr string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&ipxeServerAddr, "ipxe-server-address", ":8082", "The address the ipxe-server binds to.")
+	flag.StringVar(&imageProxyServerAddr, "image-proxy-server-address", ":8083", "The address the image-proxy-server binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -164,7 +166,10 @@ func main() {
 	}
 
 	setupLog.Info("starting ipxe-server")
-	go ipxeserver.RunServer(ipxeServerAddr, mgr.GetClient(), serverLog.WithName("ipxeserver"))
+	go ipxeserver.RunIPXEServer(ipxeServerAddr, mgr.GetClient(), serverLog.WithName("ipxeserver"))
+
+	setupLog.Info("starting image-proxy-server")
+	go ipxeserver.RunImageProxyServer(imageProxyServerAddr, mgr.GetClient(), serverLog.WithName("imageproxyserver"))
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
