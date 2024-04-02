@@ -42,6 +42,7 @@ type IPXEBootConfigReconciler struct {
 //+kubebuilder:rbac:groups=boot.ironcore.dev,resources=ipxebootconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=boot.ironcore.dev,resources=ipxebootconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=boot.ironcore.dev,resources=ipxebootconfigs/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *IPXEBootConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
