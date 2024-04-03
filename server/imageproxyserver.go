@@ -60,7 +60,7 @@ func RunImageProxyServer(imageProxyServerAddr string, k8sClient client.Client, l
 }
 
 func handleGHCR(w http.ResponseWriter, r *http.Request, imageDetails *ImageDetails, log logr.Logger) {
-	log.Info("Processing Image Proxy request", "method", r.Method, "path", r.URL.Path)
+	log.Info("Processing Image Proxy request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
 
 	bearerToken, err := imageDetails.getBearerToken()
 	if err != nil {

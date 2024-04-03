@@ -42,7 +42,7 @@ func RunIPXEServer(ipxeServerAddr string, k8sClient client.Client, log logr.Logg
 }
 
 func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client, ipxeServerAddr string, log logr.Logger) {
-	log.Info("Processing IPXE request", "method", r.Method, "path", r.URL.Path)
+	log.Info("Processing IPXE request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
 	ctx := r.Context()
 
 	clientIP, _, err := net.SplitHostPort(r.RemoteAddr)
@@ -99,7 +99,7 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 }
 
 func handleIgnition(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger) {
-	log.Info("Processing Ignition request", "method", r.Method, "path", r.URL.Path)
+	log.Info("Processing Ignition request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
 	ctx := r.Context()
 
 	uuid := path.Base(r.URL.Path)
