@@ -33,6 +33,7 @@ type IPXEBootConfigSpec struct {
 	KernelURL         string                       `json:"kernelURL,omitempty"`
 	InitrdURL         string                       `json:"initrdURL,omitempty"`
 	SquashfsURL       string                       `json:"squashfsURL,omitempty"`
+	IPXEServerURL     string                       `json:"ipxeServerURL,omitempty"`
 	IgnitionSecretRef *corev1.LocalObjectReference `json:"ignitionSecretRef,omitempty"`
 }
 

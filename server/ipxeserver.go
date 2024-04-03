@@ -21,12 +21,12 @@ type IPXETemplateData struct {
 	InitrdURL     string
 	SquashfsURL   string
 	RegistryURL   string
-	IpxeServerURL string
+	IPXEServerURL string
 }
 
-func RunIPXEServer(ipxeServerAddr string, k8sClient client.Client, log logr.Logger) {
+func RunIPXEServer(ipxeServerAddr string, k8sClient client.Client, log logr.Logger, defaultIpxeTemplateData IPXETemplateData) {
 	http.HandleFunc("/ipxe", func(w http.ResponseWriter, r *http.Request) {
-		handleIPXE(w, r, k8sClient, ipxeServerAddr, log)
+		handleIPXE(w, r, k8sClient, log, defaultIpxeTemplateData)
 	})
 
 	http.HandleFunc("/ignition/", func(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +41,7 @@ func RunIPXEServer(ipxeServerAddr string, k8sClient client.Client, log logr.Logg
 	}
 }
 
-func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client, ipxeServerAddr string, log logr.Logger) {
+func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, defaultIpxeTemplateData IPXETemplateData) {
 	log.Info("Processing IPXE request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
 	ctx := r.Context()
 
@@ -59,13 +59,18 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 		return
 	}
 
+	data := defaultIpxeTemplateData
 	if len(ipxeConfigs.Items) == 0 {
-		log.Info("No IPXEBootConfig found for client IP", "clientIP", clientIP)
-		http.NotFound(w, r)
-		return
+		log.Info("No IPXEBootConfig found for client IP, delivering default script", "clientIP", clientIP)
+	} else {
+		config := ipxeConfigs.Items[0]
+		data = IPXETemplateData{
+			KernelURL:     config.Spec.KernelURL,
+			InitrdURL:     config.Spec.InitrdURL,
+			SquashfsURL:   config.Spec.SquashfsURL,
+			IPXEServerURL: config.Spec.IPXEServerURL,
+		}
 	}
-
-	config := ipxeConfigs.Items[0]
 
 	tmplPath := filepath.Join("templates", "ipxe-script.tpl")
 	tmpl, err := template.ParseFiles(tmplPath)
@@ -73,13 +78,6 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 		log.Info("Failed to parse iPXE script template", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
-	}
-
-	data := IPXETemplateData{
-		KernelURL:     config.Spec.KernelURL,
-		InitrdURL:     config.Spec.InitrdURL,
-		SquashfsURL:   config.Spec.SquashfsURL,
-		IpxeServerURL: ipxeServerAddr,
 	}
 
 	if err := tmpl.Execute(w, data); err != nil {
