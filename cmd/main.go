@@ -62,6 +62,7 @@ func init() {
 
 func main() {
 	ctx := ctrl.LoggerInto(ctrl.SetupSignalHandler(), setupLog)
+	defaultIpxeTemplateData := NewDefaultIPXETemplateData()
 
 	var metricsAddr string
 	var enableLeaderElection bool
@@ -70,6 +71,7 @@ func main() {
 	var enableHTTP2 bool
 	var ipxeServerAddr string
 	var imageProxyServerAddr string
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&ipxeServerAddr, "ipxe-server-address", ":8082", "The address the ipxe-server binds to.")
@@ -166,7 +168,7 @@ func main() {
 	}
 
 	setupLog.Info("starting ipxe-server")
-	go ipxeserver.RunIPXEServer(ipxeServerAddr, mgr.GetClient(), serverLog.WithName("ipxeserver"))
+	go ipxeserver.RunIPXEServer(ipxeServerAddr, mgr.GetClient(), serverLog.WithName("ipxeserver"), *defaultIpxeTemplateData)
 
 	setupLog.Info("starting image-proxy-server")
 	go ipxeserver.RunImageProxyServer(imageProxyServerAddr, mgr.GetClient(), serverLog.WithName("imageproxyserver"))
@@ -199,4 +201,15 @@ func IndexIPXEBootConfigBySystemIP(ctx context.Context, mgr ctrl.Manager) error 
 			return []string{ipxeBootConfig.Spec.SystemIP}
 		},
 	)
+}
+
+func NewDefaultIPXETemplateData() *ipxeserver.IPXETemplateData {
+	var cfg ipxeserver.IPXETemplateData
+	flag.StringVar(&cfg.KernelURL, "default-kernel-url", "", "Default URL for the kernel")
+	flag.StringVar(&cfg.InitrdURL, "default-initrd-url", "", "Default URL for the initrd")
+	flag.StringVar(&cfg.SquashfsURL, "default-squashfs-url", "", "Default URL for the squashfs")
+	flag.StringVar(&cfg.IPXEServerURL, "default-ipxe-server-url", "", "Default IPXE Server URL to while generating ipxe-script")
+	flag.Parse()
+
+	return &cfg
 }
