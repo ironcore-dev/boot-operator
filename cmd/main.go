@@ -209,7 +209,6 @@ func NewDefaultIPXETemplateData() *ipxeserver.IPXETemplateData {
 	flag.StringVar(&cfg.InitrdURL, "default-initrd-url", "", "Default URL for the initrd")
 	flag.StringVar(&cfg.SquashfsURL, "default-squashfs-url", "", "Default URL for the squashfs")
 	flag.StringVar(&cfg.IPXEServerURL, "default-ipxe-server-url", "", "Default IPXE Server URL to while generating ipxe-script")
-	flag.Parse()
 
 	return &cfg
 }
