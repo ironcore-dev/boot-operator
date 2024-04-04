@@ -63,6 +63,8 @@ spec:
                 type: string
               initrdURL:
                 type: string
+              ipxeServerURL:
+                type: string
               kernelURL:
                 type: string
               squashfsURL:
