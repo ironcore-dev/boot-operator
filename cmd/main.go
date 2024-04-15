@@ -109,12 +109,12 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	// set the correct registry URL by getting the address from the environment
+	// set the correct ipxe service URL by getting the address from the environment
 	var ipxeServiceAddr string
 	if ipxeServiceURL == "" {
 		ipxeServiceAddr = os.Getenv("IPXE_SERVER_ADDRESS")
 		if ipxeServiceAddr == "" {
-			setupLog.Error(nil, "failed to set the registry URL as no address is provided")
+			setupLog.Error(nil, "failed to set the ipxe service URL as no address is provided")
 			os.Exit(1)
 		}
 		ipxeServiceURL = fmt.Sprintf("%s://%s:%d", ipxeServiceProtocol, ipxeServiceAddr, ipxeServicePort)
@@ -168,21 +168,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.IPXEBootConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "IPXEBootConfig")
-		os.Exit(1)
+	if controllers.Enabled(ipxeBootConfigController) {
+		if err = (&controller.IPXEBootConfigReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "IPXEBootConfig")
+			os.Exit(1)
+		}
 	}
 
-	if err = (&controller.ServerBootConfigurationReconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		IPXEServiceURL: ipxeServiceURL,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfiguration")
-		os.Exit(1)
+	if controllers.Enabled(serverBootConfigController) {
+		if err = (&controller.ServerBootConfigurationReconciler{
+			Client:         mgr.GetClient(),
+			Scheme:         mgr.GetScheme(),
+			IPXEServiceURL: ipxeServiceURL,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfiguration")
+			os.Exit(1)
+		}
 	}
 	//+kubebuilder:scaffold:builder
 

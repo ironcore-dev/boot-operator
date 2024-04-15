@@ -60,6 +60,14 @@ fmt: goimports ## Run goimports against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
+.PHONY: add-license
+add-license: addlicense ## Add license headers to all go files.
+	find . -name '*.go' -exec $(ADDLICENSE) -f hack/license-header.txt {} +
+
+.PHONY: check-license
+check-license: addlicense ## Check that every file has a license header present.
+	find . -name '*.go' -exec $(ADDLICENSE) -check -c 'IronCore authors' {} +
+
 .PHONY: test
 test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
@@ -195,13 +203,10 @@ addlicense: $(ADDLICENSE) ## Download addlicense locally if necessary.
 $(ADDLICENSE): $(LOCALBIN)
 	test -s $(LOCALBIN)/addlicense || GOBIN=$(LOCALBIN) go install github.com/google/addlicense@$(ADDLICENSE_VERSION)
 
-.PHONY: add-license
-add-license: addlicense ## Add license headers to all go files.
-	find . -name '*.go' -exec $(ADDLICENSE) -f hack/license-header.txt {} +
-
-.PHONY: check-license
-check-license: addlicense ## Check that every file has a license header present.
-	find . -name '*.go' -exec $(ADDLICENSE) -check -c 'IronCore authors' {} +
+.PHONY: goimports
+goimports: $(GOIMPORTS) ## Download goimports locally if necessary.
+$(GOIMPORTS): $(LOCALBIN)
+	$(call go-install-tool,$(GOIMPORTS),golang.org/x/tools/cmd/goimports,$(GOIMPORTS_VERSION))
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary (ideally with version)
