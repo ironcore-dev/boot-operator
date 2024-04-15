@@ -24,9 +24,9 @@ type IPXETemplateData struct {
 	IPXEServerURL string
 }
 
-func RunIPXEServer(ipxeServerAddr string, k8sClient client.Client, log logr.Logger, defaultIpxeTemplateData IPXETemplateData) {
+func RunIPXEServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultIpxeTemplateData IPXETemplateData) {
 	http.HandleFunc("/ipxe", func(w http.ResponseWriter, r *http.Request) {
-		handleIPXE(w, r, k8sClient, log, defaultIpxeTemplateData)
+		handleIPXE(w, r, k8sClient, log, ipxeServiceURL, defaultIpxeTemplateData)
 	})
 
 	http.HandleFunc("/ignition/", func(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +41,7 @@ func RunIPXEServer(ipxeServerAddr string, k8sClient client.Client, log logr.Logg
 	}
 }
 
-func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, defaultIpxeTemplateData IPXETemplateData) {
+func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, ipxeServiceURL string, defaultIpxeTemplateData IPXETemplateData) {
 	log.Info("Processing IPXE request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
 	ctx := r.Context()
 
@@ -68,7 +68,7 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 			KernelURL:     config.Spec.KernelURL,
 			InitrdURL:     config.Spec.InitrdURL,
 			SquashfsURL:   config.Spec.SquashfsURL,
-			IPXEServerURL: config.Spec.IPXEServerURL,
+			IPXEServerURL: ipxeServiceURL,
 		}
 	}
 

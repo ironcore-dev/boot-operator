@@ -7,7 +7,11 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
+
+	metalv1alpha1 "github.com/afritzler/metal-operator/api/v1alpha1"
+	"github.com/ironcore-dev/controller-utils/cmdutils/switches"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -40,9 +44,16 @@ const (
 	systemIPIndexKey   = "spec.systemIP"
 )
 
+const (
+	// core controllers
+	ipxeBootConfigController   = "ipxebootconfig"
+	serverBootConfigController = "serverbootconfig"
+)
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
+	utilruntime.Must(metalv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(bootv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
@@ -58,7 +69,13 @@ func main() {
 	var enableHTTP2 bool
 	var ipxeServerAddr string
 	var imageProxyServerAddr string
+	var ipxeServiceURL string
+	var ipxeServiceProtocol string
+	var ipxeServicePort int
 
+	flag.IntVar(&ipxeServicePort, "ipxe-service-port", 5000, "IPXE Service port to listen on.")
+	flag.StringVar(&ipxeServiceProtocol, "ipxe-service-protocol", "http", "IPXE Service Protocol.")
+	flag.StringVar(&ipxeServiceURL, "ipxe-service-url", "", "IPXE Service URL.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&ipxeServerAddr, "ipxe-server-address", ":8082", "The address the ipxe-server binds to.")
@@ -70,6 +87,20 @@ func main() {
 		"If set the metrics endpoint is served securely")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+
+	controllers := switches.New(
+		// core controllers
+		ipxeBootConfigController,
+		serverBootConfigController,
+	)
+
+	flag.Var(controllers, "controllers",
+		fmt.Sprintf("Controllers to enable. All controllers: %v. Disabled-by-default controllers: %v",
+			controllers.All(),
+			controllers.DisabledByDefault(),
+		),
+	)
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -77,6 +108,17 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	// set the correct registry URL by getting the address from the environment
+	var ipxeServiceAddr string
+	if ipxeServiceURL == "" {
+		ipxeServiceAddr = os.Getenv("IPXE_SERVER_ADDRESS")
+		if ipxeServiceAddr == "" {
+			setupLog.Error(nil, "failed to set the registry URL as no address is provided")
+			os.Exit(1)
+		}
+		ipxeServiceURL = fmt.Sprintf("%s://%s:%d", ipxeServiceProtocol, ipxeServiceAddr, ipxeServicePort)
+	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -133,6 +175,15 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "IPXEBootConfig")
 		os.Exit(1)
 	}
+
+	if err = (&controller.ServerBootConfigurationReconciler{
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		IPXEServiceURL: ipxeServiceURL,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfiguration")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -155,7 +206,7 @@ func main() {
 	}
 
 	setupLog.Info("starting ipxe-server")
-	go ipxeserver.RunIPXEServer(ipxeServerAddr, mgr.GetClient(), serverLog.WithName("ipxeserver"), *defaultIpxeTemplateData)
+	go ipxeserver.RunIPXEServer(ipxeServerAddr, ipxeServiceURL, mgr.GetClient(), serverLog.WithName("ipxeserver"), *defaultIpxeTemplateData)
 
 	setupLog.Info("starting image-proxy-server")
 	go ipxeserver.RunImageProxyServer(imageProxyServerAddr, mgr.GetClient(), serverLog.WithName("imageproxyserver"))
