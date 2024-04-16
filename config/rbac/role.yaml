@@ -15,6 +15,23 @@ rules:
 - apiGroups:
   - boot.ironcore.dev
   resources:
+  - ipxebootconfig
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - boot.ironcore.dev
+  resources:
+  - ipxebootconfig/status
+  verbs:
+  - get
+- apiGroups:
+  - boot.ironcore.dev
+  resources:
   - ipxebootconfigs
   verbs:
   - create
@@ -34,6 +51,28 @@ rules:
   - boot.ironcore.dev
   resources:
   - ipxebootconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - metal.ironcore.dev
+  resources:
+  - serverbootconfigurations
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - metal.ironcore.dev
+  resources:
+  - serverbootconfigurations/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - metal.ironcore.dev
+  resources:
+  - serverbootconfigurations/status
   verbs:
   - get
   - patch

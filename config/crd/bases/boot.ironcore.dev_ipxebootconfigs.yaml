@@ -60,10 +60,12 @@ spec:
                 type: object
                 x-kubernetes-map-type: atomic
               image:
+                description: 'TODO: remove image as this is not needed'
                 type: string
               initrdURL:
                 type: string
               ipxeServerURL:
+                description: 'TODO: remove later'
                 type: string
               kernelURL:
                 type: string
