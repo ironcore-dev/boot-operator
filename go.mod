@@ -10,7 +10,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.17.1
 	github.com/onsi/gomega v1.33.0
 	github.com/opencontainers/image-spec v1.1.0
-	k8s.io/api v0.29.4
+	k8s.io/api v0.30.0
 	k8s.io/apimachinery v0.30.0
 	k8s.io/client-go v0.29.4
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661
