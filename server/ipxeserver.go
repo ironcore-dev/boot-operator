@@ -11,12 +11,13 @@ import (
 	"path/filepath"
 	"text/template"
 
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	butaneconfig "github.com/coreos/butane/config"
 	butanecommon "github.com/coreos/butane/config/common"
 	"github.com/go-logr/logr"
 	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type IPXETemplateData struct {
