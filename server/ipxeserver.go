@@ -4,16 +4,20 @@
 package server
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"path"
 	"path/filepath"
 	"text/template"
 
-	"github.com/go-logr/logr"
-	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	butaneconfig "github.com/coreos/butane/config"
+	butanecommon "github.com/coreos/butane/config/common"
+	"github.com/go-logr/logr"
+	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
 )
 
 type IPXETemplateData struct {
@@ -137,11 +141,35 @@ func handleIgnition(w http.ResponseWriter, r *http.Request, k8sClient client.Cli
 		return
 	}
 
+	ignitionJSONData, err := renderIgnition(ignitionData)
+	if err != nil {
+		log.Info("Failed to render the ignition data to json", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
-	_, err := w.Write(ignitionData)
+	_, err = w.Write(ignitionJSONData)
 	if err != nil {
 		log.Info("Failed to write the ignition http response", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+}
+
+func renderIgnition(yamlData []byte) ([]byte, error) {
+	translateOptions := butanecommon.TranslateBytesOptions{
+		Raw:    true,
+		Pretty: false,
+		TranslateOptions: butanecommon.TranslateOptions{
+			NoResourceAutoCompression: true,
+		},
+	}
+
+	jsonData, _, err := butaneconfig.TranslateBytes(yamlData, translateOptions)
+	if err != nil {
+		return nil, fmt.Errorf("translation error from butane %w", err)
+	}
+
+	return jsonData, nil
 }
