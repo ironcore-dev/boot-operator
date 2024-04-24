@@ -3,7 +3,7 @@ module github.com/ironcore-dev/ipxe-operator
 go 1.22.2
 
 require (
-	github.com/afritzler/metal-operator v0.0.0-20240412131812-1fa9454427d0
+	github.com/afritzler/metal-operator v0.0.0-20240424135741-4d378a6dc7b7
 	github.com/coreos/butane v0.20.0
 	github.com/go-logr/logr v1.4.1
 	github.com/ironcore-dev/controller-utils v0.9.3
