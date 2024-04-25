@@ -4,27 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.14.0
-  name: ipxebootconfigs.boot.ironcore.dev
+  name: httpbootconfigs.boot.ironcore.dev
 spec:
   group: boot.ironcore.dev
   names:
-    kind: IPXEBootConfig
-    listKind: IPXEBootConfigList
-    plural: ipxebootconfigs
-    singular: ipxebootconfig
+    kind: HTTPBootConfig
+    listKind: HTTPBootConfigList
+    plural: httpbootconfigs
+    singular: httpbootconfig
   scope: Namespaced
   versions:
-  - additionalPrinterColumns:
-    - jsonPath: .status.state
-      name: State
-      type: string
-    - jsonPath: .metadata.creationTimestamp
-      name: Age
-      type: date
-    name: v1alpha1
+  - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: IPXEBootConfig is the Schema for the ipxebootconfigs API
+        description: HTTPBootConfig is the Schema for the httpbootconfigs API
         properties:
           apiVersion:
             description: |-
@@ -44,8 +37,10 @@ spec:
           metadata:
             type: object
           spec:
-            description: IPXEBootConfigSpec defines the desired state of IPXEBootConfig
+            description: HTTPBootConfigSpec defines the desired state of HTTPBootConfig
             properties:
+              cmdLine:
+                type: string
               ignitionSecretRef:
                 description: |-
                   LocalObjectReference contains enough information to let you locate the
@@ -59,31 +54,23 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              image:
-                description: 'TODO: remove image as this is not needed'
-                type: string
               initrdURL:
-                type: string
-              ipxeServerURL:
-                description: 'TODO: remove later'
                 type: string
               kernelURL:
                 type: string
               squashfsURL:
                 type: string
               systemIP:
-                type: string
+                items:
+                  type: string
+                type: array
               systemUUID:
-                description: 'Important: Run "make" to regenerate code after modifying
-                  this file'
                 type: string
             type: object
           status:
-            description: IPXEBootConfigStatus defines the observed state of IPXEBootConfig
+            description: HTTPBootConfigStatus defines the observed state of HTTPBootConfig
             properties:
               state:
-                description: 'Important: Run "make" to regenerate code after modifying
-                  this file'
                 type: string
             type: object
         type: object
