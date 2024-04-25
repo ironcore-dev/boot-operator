@@ -1,0 +1,20 @@
+apiVersion: boot.ironcore.dev/v1alpha1
+kind: HTTPBootConfig
+metadata:
+  labels:
+    app.kubernetes.io/name: httpbootconfig
+    app.kubernetes.io/instance: httpbootconfig-sample
+    app.kubernetes.io/part-of: ipxe-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: ipxe-operator
+  name: httpbootconfig-sample
+spec:
+  systemUUID: 1234
+  systemIPs:
+    - 1.2.3.4
+  ignitionSecretRef:
+    name: ignition-sample
+  kernelURL: "10.0.0.1/ipxe/rootfs.vmlinuz"
+  initrdURL: "10.0.0.1/ipxe/rootfs.initrd"
+  squashfsURL: "10.0.0.1/ipxe/root.squashfs"
+  

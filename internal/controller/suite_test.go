@@ -87,6 +87,9 @@ var _ = BeforeSuite(func() {
 	Expect(bootv1alpha1.AddToScheme(scheme.Scheme)).NotTo(HaveOccurred())
 	Expect(metalv1alpha1.AddToScheme(scheme.Scheme)).NotTo(HaveOccurred())
 
+	err = bootv1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
 	//+kubebuilder:scaffold:scheme
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
