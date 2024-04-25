@@ -17,4 +17,13 @@ resources:
   kind: IPXEBootConfig
   path: github.com/ironcore-dev/ipxe-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: ironcore.dev
+  group: boot
+  kind: HTTPBootConfig
+  path: github.com/ironcore-dev/ipxe-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

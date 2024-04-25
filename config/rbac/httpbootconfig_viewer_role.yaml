@@ -1,0 +1,27 @@
+# permissions for end users to view httpbootconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: httpbootconfig-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: ipxe-operator
+    app.kubernetes.io/part-of: ipxe-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: httpbootconfig-viewer-role
+rules:
+- apiGroups:
+  - boot.ironcore.dev
+  resources:
+  - httpbootconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - boot.ironcore.dev
+  resources:
+  - httpbootconfigs/status
+  verbs:
+  - get
