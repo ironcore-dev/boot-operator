@@ -48,6 +48,7 @@ const (
 	// core controllers
 	ipxeBootConfigController   = "ipxebootconfig"
 	serverBootConfigController = "serverbootconfig"
+	httpBootConfigController   = "httpbootconfig"
 )
 
 func init() {
@@ -92,6 +93,7 @@ func main() {
 		// core controllers
 		ipxeBootConfigController,
 		serverBootConfigController,
+		httpBootConfigController,
 	)
 
 	flag.Var(controllers, "controllers",
@@ -184,17 +186,21 @@ func main() {
 			Scheme:         mgr.GetScheme(),
 			IPXEServiceURL: ipxeServiceURL,
 		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfiguration")
+			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfig")
 			os.Exit(1)
 		}
 	}
-	if err = (&controller.HTTPBootConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "HTTPBootConfig")
-		os.Exit(1)
+
+	if controllers.Enabled(httpBootConfigController) {
+		if err = (&controller.HTTPBootConfigReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "HTTPBootConfig")
+			os.Exit(1)
+		}
 	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

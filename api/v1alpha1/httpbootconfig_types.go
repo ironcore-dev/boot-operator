@@ -16,19 +16,21 @@ type HTTPBootConfigSpec struct {
 
 // HTTPBootConfigStatus defines the observed state of HTTPBootConfig
 type HTTPBootConfigStatus struct {
-	State HTTPConfigState `json:"state,omitempty"`
+	State HTTPBootConfigState `json:"state,omitempty"`
 }
 
-type HTTPConfigState string
+type HTTPBootConfigState string
 
 const (
-	HTTPConfigStateReady   HTTPConfigState = "Ready"
-	HTTPConfigStatePending HTTPConfigState = "Pending"
-	HTTPConfigStateError   HTTPConfigState = "Error"
+	HTTPBootConfigStateReady   HTTPBootConfigState = "Ready"
+	HTTPBootConfigStatePending HTTPBootConfigState = "Pending"
+	HTTPBootConfigStateError   HTTPBootConfigState = "Error"
 )
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="State",type=string,JSONPath=`.status.state`
+//+kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // HTTPBootConfig is the Schema for the httpbootconfigs API
 type HTTPBootConfig struct {
