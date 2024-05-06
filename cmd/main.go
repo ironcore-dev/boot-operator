@@ -29,7 +29,7 @@ import (
 
 	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
 	"github.com/ironcore-dev/ipxe-operator/internal/controller"
-	ipxeserver "github.com/ironcore-dev/ipxe-operator/server"
+	bootserver "github.com/ironcore-dev/ipxe-operator/server"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -217,16 +217,21 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := IndexHTTPBootConfigBySystemUUID(ctx, mgr); err != nil {
+		setupLog.Error(err, "unable to set up indexer for HTTPBootConfig SystemUUID")
+		os.Exit(1)
+	}
+
 	if err := IndexIPXEBootConfigBySystemIP(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to set up indexer for IPXEBootConfig SystemIP")
 		os.Exit(1)
 	}
 
-	setupLog.Info("starting ipxe-server")
-	go ipxeserver.RunIPXEServer(ipxeServerAddr, ipxeServiceURL, mgr.GetClient(), serverLog.WithName("ipxeserver"), *defaultIpxeTemplateData)
+	setupLog.Info("starting boot-server")
+	go bootserver.RunBootServer(ipxeServerAddr, ipxeServiceURL, mgr.GetClient(), serverLog.WithName("bootserver"), *defaultIpxeTemplateData)
 
 	setupLog.Info("starting image-proxy-server")
-	go ipxeserver.RunImageProxyServer(imageProxyServerAddr, mgr.GetClient(), serverLog.WithName("imageproxyserver"))
+	go bootserver.RunImageProxyServer(imageProxyServerAddr, mgr.GetClient(), serverLog.WithName("imageproxyserver"))
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
@@ -258,8 +263,20 @@ func IndexIPXEBootConfigBySystemIP(ctx context.Context, mgr ctrl.Manager) error 
 	)
 }
 
-func NewDefaultIPXETemplateData() *ipxeserver.IPXETemplateData {
-	var cfg ipxeserver.IPXETemplateData
+func IndexHTTPBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) error {
+	return mgr.GetFieldIndexer().IndexField(
+		ctx,
+		&bootv1alpha1.HTTPBootConfig{},
+		systemUUIDIndexKey,
+		func(Obj client.Object) []string {
+			HTTPBootConfig := Obj.(*bootv1alpha1.HTTPBootConfig)
+			return []string{HTTPBootConfig.Spec.SystemUUID}
+		},
+	)
+}
+
+func NewDefaultIPXETemplateData() *bootserver.IPXETemplateData {
+	var cfg bootserver.IPXETemplateData
 	flag.StringVar(&cfg.KernelURL, "default-kernel-url", "", "Default URL for the kernel")
 	flag.StringVar(&cfg.InitrdURL, "default-initrd-url", "", "Default URL for the initrd")
 	flag.StringVar(&cfg.SquashfsURL, "default-squashfs-url", "", "Default URL for the squashfs")
