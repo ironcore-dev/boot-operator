@@ -39,8 +39,6 @@ spec:
           spec:
             description: HTTPBootConfigSpec defines the desired state of HTTPBootConfig
             properties:
-              cmdLine:
-                type: string
               ignitionSecretRef:
                 description: |-
                   LocalObjectReference contains enough information to let you locate the
@@ -54,16 +52,6 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              initrdURL:
-                type: string
-              kernelURL:
-                type: string
-              squashfsURL:
-                type: string
-              systemIP:
-                items:
-                  type: string
-                type: array
               systemUUID:
                 type: string
             type: object
