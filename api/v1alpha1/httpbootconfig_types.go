@@ -10,16 +10,8 @@ import (
 
 // HTTPBootConfigSpec defines the desired state of HTTPBootConfig
 type HTTPBootConfigSpec struct {
-	SystemUUID string   `json:"systemUUID,omitempty"`
-	SystemIPs  []string `json:"systemIP,omitempty"` // TODO: Add the custom serialization. For now validate at the controller.
-
-	KernelURL   string `json:"kernelURL,omitempty"`
-	InitrdURL   string `json:"initrdURL,omitempty"`
-	SquashfsURL string `json:"squashfsURL,omitempty"`
-
+	SystemUUID        string                       `json:"systemUUID,omitempty"`
 	IgnitionSecretRef *corev1.LocalObjectReference `json:"ignitionSecretRef,omitempty"`
-
-	CmdLine string `json:"cmdLine,omitempty"`
 }
 
 // HTTPBootConfigStatus defines the observed state of HTTPBootConfig
