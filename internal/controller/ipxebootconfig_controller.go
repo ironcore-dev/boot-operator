@@ -51,20 +51,20 @@ func (r *IPXEBootConfigReconciler) reconcileExists(ctx context.Context, log logr
 
 func (r *IPXEBootConfigReconciler) reconcile(ctx context.Context, log logr.Logger, ipxeBootConfig *bootv1alpha1.IPXEBootConfig) (ctrl.Result, error) {
 	log.V(1).Info("Ensuring Ignition")
-	state, err := r.ensureIgnition(ctx, log, ipxeBootConfig)
-	if err != nil {
-		err = r.patchStatus(ctx, ipxeBootConfig, state)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to patch status %w", err)
+	state, ignitionErr := r.ensureIgnition(ctx, log, ipxeBootConfig)
+	if ignitionErr != nil {
+		patchError := r.patchStatus(ctx, ipxeBootConfig, state)
+		if patchError != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch status %w %w", ignitionErr, patchError)
 		}
-		return ctrl.Result{}, fmt.Errorf("failed to ensure the Ignition %w", err)
+
+		log.V(1).Info("Failed to Ensure Ignition", "Error", ignitionErr)
+		return ctrl.Result{}, nil
 	}
 
-	// TODO: Add simple validation for the Spec.*URLs here.
-
-	err = r.patchStatus(ctx, ipxeBootConfig, state)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to patch status %w", err)
+	patchErr := r.patchStatus(ctx, ipxeBootConfig, state)
+	if patchErr != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to patch status %w", patchErr)
 	}
 
 	return ctrl.Result{}, nil
@@ -75,7 +75,7 @@ func (r *IPXEBootConfigReconciler) ensureIgnition(ctx context.Context, _ logr.Lo
 	if ipxeBootConfig.Spec.IgnitionSecretRef != nil {
 		IgnitionSecret := &corev1.Secret{}
 		if err := r.Get(ctx, client.ObjectKey{Name: ipxeBootConfig.Spec.IgnitionSecretRef.Name, Namespace: ipxeBootConfig.Namespace}, IgnitionSecret); err != nil {
-			return bootv1alpha1.IPXEBootConfigStateError, client.IgnoreNotFound(err)
+			return bootv1alpha1.IPXEBootConfigStateError, err
 			// TODO: Add some validation steps to ensure that the IgntionData is compliant, if necessary.
 			// Assume for now, that it's going to json format.
 		}
