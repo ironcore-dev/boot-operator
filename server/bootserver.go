@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	corev1 "k8s.io/api/core/v1"
@@ -73,11 +74,30 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 		return
 	}
 
+	clientIPs := []string{}
+	clientIPs = append(clientIPs, clientIP)
+
+	// Attempt to extract IPs from X-Forwarded-For if present
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		for _, ip := range strings.Split(xff, ",") {
+			trimmedIP := strings.TrimSpace(ip)
+			if trimmedIP != "" {
+				clientIPs = append(clientIPs, trimmedIP)
+			}
+		}
+	}
+
 	var ipxeConfigs bootv1alpha1.IPXEBootConfigList
-	if err := k8sClient.List(ctx, &ipxeConfigs, client.MatchingFields{"spec.systemIP": clientIP}); err != nil {
-		log.Info("Failed to list IPXEBootConfig", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+	for _, ip := range clientIPs {
+		if err := k8sClient.List(ctx, &ipxeConfigs, client.MatchingFields{"spec.systemIP": ip}); err != nil {
+			log.Info("Failed to list IPXEBootConfig for IP", "IP", ip, "error", err)
+			continue
+		}
+
+		if len(ipxeConfigs.Items) > 0 {
+			log.Info("Found IPXEBootConfig", "IP", ip)
+			break
+		}
 	}
 
 	data := defaultIpxeTemplateData
