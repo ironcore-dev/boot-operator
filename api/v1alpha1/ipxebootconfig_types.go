@@ -22,8 +22,9 @@ type IPXEBootConfigSpec struct {
 	InitrdURL   string `json:"initrdURL,omitempty"`
 	SquashfsURL string `json:"squashfsURL,omitempty"`
 	// TODO: remove later
-	IPXEServerURL     string                       `json:"ipxeServerURL,omitempty"`
-	IgnitionSecretRef *corev1.LocalObjectReference `json:"ignitionSecretRef,omitempty"`
+	IPXEServerURL       string                       `json:"ipxeServerURL,omitempty"`
+	IgnitionSecretRef   *corev1.LocalObjectReference `json:"ignitionSecretRef,omitempty"`
+	IPXEScriptSecretRef *corev1.LocalObjectReference `json:"ipxeScriptSecretRef,omitempty"`
 }
 
 type IPXEBootConfigState string
@@ -35,6 +36,7 @@ const (
 )
 
 const DefaultIgnitionKey = "ignition"
+const DefaultIPXEScriptKey = "ipxe-script"
 
 // IPXEBootConfigStatus defines the observed state of IPXEBootConfig
 type IPXEBootConfigStatus struct {

@@ -13,11 +13,13 @@ import (
 	"text/template"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	butaneconfig "github.com/coreos/butane/config"
 	butanecommon "github.com/coreos/butane/config/common"
 	"github.com/go-logr/logr"
+	"github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
 	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
 )
 
@@ -74,10 +76,7 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 		return
 	}
 
-	clientIPs := []string{}
-	clientIPs = append(clientIPs, clientIP)
-
-	// Attempt to extract IPs from X-Forwarded-For if present
+	clientIPs := []string{clientIP}
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		for _, ip := range strings.Split(xff, ",") {
 			trimmedIP := strings.TrimSpace(ip)
@@ -100,40 +99,40 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 		}
 	}
 
-	data := defaultIpxeTemplateData
 	if len(ipxeConfigs.Items) == 0 {
 		log.Info("No IPXEBootConfig found for client IP, delivering default script", "clientIP", clientIP)
+		serveDefaultIPXETemplate(w, log, ipxeServiceURL, defaultIpxeTemplateData)
 	} else {
 		config := ipxeConfigs.Items[0]
-		data = IPXETemplateData{
+		if config.Spec.IPXEScriptSecretRef != nil {
+			secret := &corev1.Secret{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: config.Spec.IPXEScriptSecretRef.Name, Namespace: config.Namespace}, secret)
+			if err != nil {
+				log.Error(err, "Failed to fetch IPXE script from secret", "SecretName", config.Spec.IPXEScriptSecretRef.Name)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+
+			ipxeScript, exists := secret.Data[v1alpha1.DefaultIPXEScriptKey]
+			if !exists {
+				log.Info("IPXE script not found in the secret", "ExpectedKey", v1alpha1.DefaultIPXEScriptKey)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+
+			if _, err := w.Write(ipxeScript); err != nil {
+				log.Info("Failed to write custom IPXE script", "error", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			}
+			return
+		}
+
+		serveDefaultIPXETemplate(w, log, ipxeServiceURL, IPXETemplateData{
 			KernelURL:     config.Spec.KernelURL,
 			InitrdURL:     config.Spec.InitrdURL,
 			SquashfsURL:   config.Spec.SquashfsURL,
 			IPXEServerURL: ipxeServiceURL,
-		}
-	}
-
-	tmplPath := filepath.Join("templates", "ipxe-script.tpl")
-	tmpl, err := template.ParseFiles(tmplPath)
-	if err != nil {
-		log.Info("Failed to parse iPXE script template", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	if err := tmpl.Execute(w, data); err != nil {
-		log.Info("Failed to execute template", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	log.Info("Successfully generated iPXE script", "clientIP", clientIP)
-
-	_, err = w.Write(nil)
-	if err != nil {
-		log.Info("Failed to write the ipxe http response", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+		})
 	}
 }
 
@@ -184,6 +183,21 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		log.Info("Failed to write the ignition http response", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
+	}
+}
+
+func serveDefaultIPXETemplate(w http.ResponseWriter, log logr.Logger, ipxeServiceURL string, data IPXETemplateData) {
+	tmplPath := filepath.Join("templates", "ipxe-script.tpl")
+	tmpl, err := template.ParseFiles(tmplPath)
+	if err != nil {
+		log.Info("Failed to parse iPXE script template", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	if err := tmpl.Execute(w, data); err != nil {
+		log.Info("Failed to execute template", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
 
