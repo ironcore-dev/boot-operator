@@ -64,7 +64,11 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+              systemIP:
+                type: string
               systemUUID:
+                type: string
+              ukiURL:
                 type: string
             type: object
           status:

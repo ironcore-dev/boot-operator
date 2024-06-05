@@ -12,6 +12,8 @@ import (
 type HTTPBootConfigSpec struct {
 	SystemUUID        string                       `json:"systemUUID,omitempty"`
 	IgnitionSecretRef *corev1.LocalObjectReference `json:"ignitionSecretRef,omitempty"`
+	SystemIP          string                       `json:"systemIP,omitempty"`
+	UKIURL            string                       `json:"ukiURL,omitempty"`
 }
 
 // HTTPBootConfigStatus defines the observed state of HTTPBootConfig

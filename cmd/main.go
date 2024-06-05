@@ -62,6 +62,7 @@ func init() {
 func main() {
 	ctx := ctrl.LoggerInto(ctrl.SetupSignalHandler(), setupLog)
 	defaultIpxeTemplateData := NewDefaultIPXETemplateData()
+	defaultHttpUKIURL := NewDefaultHTTPBootData()
 
 	var metricsAddr string
 	var enableLeaderElection bool
@@ -227,8 +228,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := IndexHTTPBootConfigBySystemIP(ctx, mgr); err != nil {
+		setupLog.Error(err, "unable to set up indexer for HTTPBootConfig SystemIP")
+		os.Exit(1)
+	}
+
 	setupLog.Info("starting boot-server")
-	go bootserver.RunBootServer(ipxeServerAddr, ipxeServiceURL, mgr.GetClient(), serverLog.WithName("bootserver"), *defaultIpxeTemplateData)
+	go bootserver.RunBootServer(ipxeServerAddr, ipxeServiceURL, mgr.GetClient(), serverLog.WithName("bootserver"), *defaultIpxeTemplateData, *defaultHttpUKIURL)
 
 	setupLog.Info("starting image-proxy-server")
 	go bootserver.RunImageProxyServer(imageProxyServerAddr, mgr.GetClient(), serverLog.WithName("imageproxyserver"))
@@ -275,6 +281,18 @@ func IndexHTTPBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) erro
 	)
 }
 
+func IndexHTTPBootConfigBySystemIP(ctx context.Context, mgr ctrl.Manager) error {
+	return mgr.GetFieldIndexer().IndexField(
+		ctx,
+		&bootv1alpha1.HTTPBootConfig{},
+		systemIPIndexKey,
+		func(Obj client.Object) []string {
+			HTTPBootConfig := Obj.(*bootv1alpha1.HTTPBootConfig)
+			return []string{HTTPBootConfig.Spec.SystemIP}
+		},
+	)
+}
+
 func NewDefaultIPXETemplateData() *bootserver.IPXETemplateData {
 	var cfg bootserver.IPXETemplateData
 	flag.StringVar(&cfg.KernelURL, "default-kernel-url", "", "Default URL for the kernel")
@@ -283,4 +301,11 @@ func NewDefaultIPXETemplateData() *bootserver.IPXETemplateData {
 	flag.StringVar(&cfg.IPXEServerURL, "default-ipxe-server-url", "", "Default IPXE Server URL to while generating ipxe-script")
 
 	return &cfg
+}
+
+func NewDefaultHTTPBootData() *string {
+	var defaultUKIURL string
+	flag.StringVar(&defaultUKIURL, "default-httpboot-uki-url", "", "Default UKI URL for http boot")
+
+	return &defaultUKIURL
 }
