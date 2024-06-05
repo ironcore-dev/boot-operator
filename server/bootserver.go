@@ -4,6 +4,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -31,9 +32,13 @@ type IPXETemplateData struct {
 	IPXEServerURL string
 }
 
-func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultIpxeTemplateData IPXETemplateData) {
+func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultIpxeTemplateData IPXETemplateData, defaultUKIURL string) {
 	http.HandleFunc("/ipxe", func(w http.ResponseWriter, r *http.Request) {
 		handleIPXE(w, r, k8sClient, log, ipxeServiceURL, defaultIpxeTemplateData)
+	})
+
+	http.HandleFunc("/httpboot", func(w http.ResponseWriter, r *http.Request) {
+		handleHTTPBoot(w, r, k8sClient, log, defaultUKIURL)
 	})
 
 	http.HandleFunc("/ignition/", func(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +56,7 @@ func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient clien
 		}
 
 		if len(ipxeBootConfigList.Items) == 0 {
-			log.Info("No IPXEBootConfig found with given UUID")
+			log.Info("No IPXEBootConfig found with given UUID. Trying HTTPBootConfig")
 			handleIgnitionHTTPBoot(w, r, k8sClient, log, uuid)
 		} else {
 			handleIgnitionIPXEBoot(w, r, k8sClient, log, uuid)
@@ -266,4 +271,77 @@ func renderIgnition(yamlData []byte) ([]byte, error) {
 	}
 
 	return jsonData, nil
+}
+
+func handleHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, defaultUKIURL string) {
+	log.Info("Processing HTTPBoot request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
+	ctx := r.Context()
+
+	clientIP, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		log.Error(err, "Failed to parse client IP address", "clientIP", r.RemoteAddr)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	clientIPs := []string{clientIP}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		for _, ip := range strings.Split(xff, ",") {
+			trimmedIP := strings.TrimSpace(ip)
+			if trimmedIP != "" {
+				clientIPs = append(clientIPs, trimmedIP)
+			}
+		}
+	}
+
+	var httpBootConfigs bootv1alpha1.HTTPBootConfigList
+	for _, ip := range clientIPs {
+		if err := k8sClient.List(ctx, &httpBootConfigs, client.MatchingFields{"spec.systemIP": ip}); err != nil {
+			log.Info("Failed to list HTTPBootConfig for IP", "IP", ip, "error", err)
+			continue
+		}
+
+		if len(httpBootConfigs.Items) > 0 {
+			log.Info("Found HTTPBootConfig", "IP", ip)
+			break
+		}
+	}
+
+	var httpBootResponseData map[string]string
+	if len(httpBootConfigs.Items) == 0 {
+		log.Info("No HTTPBootConfig found for client IP, delivering default httpboot data", "clientIP", clientIP)
+		httpBootResponseData = map[string]string{
+			"ClientIPs": strings.Join(clientIPs, ","),
+			"UKIURL":    defaultUKIURL,
+		}
+	} else {
+		// TODO: Pick the first HttpBootConfig if multiple CRs are found.
+		// Implement better validation in the future.
+		httpBootConfig := httpBootConfigs.Items[0]
+
+		httpBootResponseData = map[string]string{
+			"ClientIPs":  strings.Join(clientIPs, ","),
+			"UKIURL":     "",
+			"SystemUUID": "",
+		}
+		if httpBootConfig.Spec.UKIURL != "" {
+			httpBootResponseData["UKIURL"] = httpBootConfig.Spec.UKIURL
+		}
+		if httpBootConfig.Spec.SystemUUID != "" {
+			httpBootResponseData["SystemUUID"] = httpBootConfig.Spec.SystemUUID
+		}
+	}
+
+	response, err := json.Marshal(httpBootResponseData)
+	if err != nil {
+		log.Error(err, "Failed to marshal response data")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if _, err := w.Write(response); err != nil {
+		log.Error(err, "Failed to write response")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
 }
