@@ -88,7 +88,7 @@ func (r *HTTPBootConfigReconciler) ensureIgnition(ctx context.Context, _ logr.Lo
 	return bootv1alpha1.HTTPBootConfigStateReady, nil
 }
 
-func (r *HTTPBootConfigReconciler) delete(_ context.Context, log logr.Logger, HTTPBootConfig *bootv1alpha1.HTTPBootConfig) (ctrl.Result, error) {
+func (r *HTTPBootConfigReconciler) delete(_ context.Context, log logr.Logger, _ *bootv1alpha1.HTTPBootConfig) (ctrl.Result, error) {
 	log.V(1).Info("Deleting HTTPBootConfig")
 
 	// TODO

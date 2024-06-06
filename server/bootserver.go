@@ -49,7 +49,7 @@ func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient clien
 		}
 
 		ipxeBootConfigList := &bootv1alpha1.IPXEBootConfigList{}
-		err := k8sClient.List(r.Context(), ipxeBootConfigList, client.MatchingFields{"spec.systemUUID": uuid})
+		err := k8sClient.List(r.Context(), ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid})
 		if client.IgnoreNotFound(err) != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
@@ -93,7 +93,7 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 
 	var ipxeConfigs bootv1alpha1.IPXEBootConfigList
 	for _, ip := range clientIPs {
-		if err := k8sClient.List(ctx, &ipxeConfigs, client.MatchingFields{"spec.systemIP": ip}); err != nil {
+		if err := k8sClient.List(ctx, &ipxeConfigs, client.MatchingFields{bootv1alpha1.SystemIPIndexKey: ip}); err != nil {
 			log.Info("Failed to list IPXEBootConfig for IP", "IP", ip, "error", err)
 			continue
 		}
@@ -146,7 +146,7 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 	ctx := r.Context()
 
 	ipxeBootConfigList := &bootv1alpha1.IPXEBootConfigList{}
-	if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{"spec.systemUUID": uuid}); err != nil {
+	if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid}); err != nil {
 		http.Error(w, "Resource Not Found", http.StatusNotFound)
 		log.Info("Failed to find IPXEBootConfig", "error", err.Error())
 		return
@@ -211,7 +211,7 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 	ctx := r.Context()
 
 	HTTPBootConfigList := &bootv1alpha1.HTTPBootConfigList{}
-	if err := k8sClient.List(ctx, HTTPBootConfigList, client.MatchingFields{"spec.systemUUID": uuid}); err != nil {
+	if err := k8sClient.List(ctx, HTTPBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid}); err != nil {
 		http.Error(w, "Resource Not Found", http.StatusNotFound)
 		log.Info("Failed to find HTTPBootConfigList", "error", err.Error())
 		return
@@ -297,7 +297,7 @@ func handleHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Cli
 
 	var httpBootConfigs bootv1alpha1.HTTPBootConfigList
 	for _, ip := range clientIPs {
-		if err := k8sClient.List(ctx, &httpBootConfigs, client.MatchingFields{"spec.systemIP": ip}); err != nil {
+		if err := k8sClient.List(ctx, &httpBootConfigs, client.MatchingFields{bootv1alpha1.SystemIPIndexKey: ip}); err != nil {
 			log.Info("Failed to list HTTPBootConfig for IP", "IP", ip, "error", err)
 			continue
 		}

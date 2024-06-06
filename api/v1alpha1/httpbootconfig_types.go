@@ -12,7 +12,7 @@ import (
 type HTTPBootConfigSpec struct {
 	SystemUUID        string                       `json:"systemUUID,omitempty"`
 	IgnitionSecretRef *corev1.LocalObjectReference `json:"ignitionSecretRef,omitempty"`
-	SystemIP          string                       `json:"systemIP,omitempty"`
+	SystemIPs         []string                     `json:"systemIPs,omitempty"`
 	UKIURL            string                       `json:"ukiURL,omitempty"`
 }
 

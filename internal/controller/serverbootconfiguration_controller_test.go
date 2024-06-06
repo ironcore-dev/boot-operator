@@ -88,7 +88,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 				BlockOwnerDeletion: ptr.To(true),
 			})),
 			HaveField("Spec.SystemUUID", server.Spec.UUID),
-			HaveField("Spec.SystemIP", "1.1.1.1"),
+			HaveField("Spec.SystemIPs", ContainElement("1.1.1.1")),
 			HaveField("Spec.KernelURL", "http://localhost:5000/image?imageName=foo&version=bar&layerName=application/vnd.ironcore.image.vmlinuz.v1alpha1.vmlinuz"),
 			HaveField("Spec.InitrdURL", "http://localhost:5000/image?imageName=foo&version=bar&layerName=application/vnd.ironcore.image.initramfs.v1alpha1.initramfs"),
 			HaveField("Spec.SquashfsURL", "http://localhost:5000/image?imageName=foo&version=bar&layerName=application/vnd.ironcore.image.squashfs.v1alpha1.squashfs"),

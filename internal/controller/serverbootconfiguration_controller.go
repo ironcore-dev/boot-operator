@@ -79,11 +79,11 @@ func (r *ServerBootConfigurationReconciler) reconcile(ctx context.Context, log l
 	}
 	log.V(1).Info("Got system UUID from BootConfig", "systemUUID", systemUUID)
 
-	systemIP, err := r.getSystemIPFromBootConfig(ctx, config)
+	systemIPs, err := r.getSystemIPFromBootConfig(ctx, config)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get system IP from BootConfig: %w", err)
 	}
-	log.V(1).Info("Got system IP from BootConfig", "systemIP", systemIP)
+	log.V(1).Info("Got system IP from BootConfig", "systemIPs", systemIPs)
 
 	kernelURL, initrdURL, squashFSURL, err := r.getImageDetailsFromConfig(ctx, config)
 	if err != nil {
@@ -102,7 +102,7 @@ func (r *ServerBootConfigurationReconciler) reconcile(ctx context.Context, log l
 		},
 		Spec: v1alpha1.IPXEBootConfigSpec{
 			SystemUUID:        systemUUID,
-			SystemIP:          systemIP,
+			SystemIPs:         systemIPs,
 			KernelURL:         kernelURL,
 			InitrdURL:         initrdURL,
 			SquashfsURL:       squashFSURL,
@@ -162,22 +162,22 @@ func (r *ServerBootConfigurationReconciler) getSystemUUIDFromBootConfig(ctx cont
 	return server.Spec.UUID, nil
 }
 
-func (r *ServerBootConfigurationReconciler) getSystemIPFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {
+func (r *ServerBootConfigurationReconciler) getSystemIPFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) ([]string, error) {
 	server := &metalv1alpha1.Server{}
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
-		return "", fmt.Errorf("failed to get Server: %w", err)
+		return nil, fmt.Errorf("failed to get Server: %w", err)
 	}
 
+	systemIPs := []string{}
 	for _, nic := range server.Status.NetworkInterfaces {
-		// TODO: we will use the first NIC for now. Need to decide later what to do about it.
-		return nic.IP.String(), nil
+		systemIPs = append(systemIPs, nic.IP.String())
+		return systemIPs, nil
 	}
 
-	return "", nil
+	return nil, nil
 }
 
 func (r *ServerBootConfigurationReconciler) getImageDetailsFromConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
-	// http://[2a10:afc0:e013:d002::]:30007/image?imageName=ghcr.io/ironcore-dev/os-images/gardenlinux&version=1443.3&layerName=initramfs
 	imageDetails := strings.Split(config.Spec.Image, ":")
 	if len(imageDetails) != 2 {
 		return "", "", "", fmt.Errorf("invalid image format")
