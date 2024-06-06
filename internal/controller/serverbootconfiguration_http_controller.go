@@ -101,7 +101,38 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 	}
 	log.V(1).Info("Applied HTTPBoot config for server boot configuration")
 
+	if err := r.Get(ctx, client.ObjectKey{Namespace: config.Namespace, Name: config.Name}, httpBootConfig); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to get HTTPBoot config: %w", err)
+	}
+
+	if err := r.patchConfigStateFromHTTPState(ctx, httpBootConfig, config); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to patch server boot config state to %s: %w", httpBootConfig.Status.State, err)
+	}
+	log.V(1).Info("Patched server boot config state")
+
+	log.V(1).Info("Reconciled ServerBootConfiguration")
+
 	return ctrl.Result{}, nil
+}
+
+func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ctx context.Context, httpBootConfig *v1alpha1.HTTPBootConfig, config *metalv1alpha1.ServerBootConfiguration) error {
+	if httpBootConfig.Status.State == bootv1alpha1.HTTPBootConfigStateReady {
+		return r.patchState(ctx, config, metalv1alpha1.ServerBootConfigurationStateReady)
+	}
+
+	if httpBootConfig.Status.State == bootv1alpha1.HTTPBootConfigStateError {
+		return r.patchState(ctx, config, metalv1alpha1.ServerBootConfigurationStateError)
+	}
+	return nil
+}
+
+func (r *ServerBootConfigurationHTTPReconciler) patchState(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration, state metalv1alpha1.ServerBootConfigurationState) error {
+	configBase := config.DeepCopy()
+	config.Status.State = state
+	if err := r.Status().Patch(ctx, config, client.MergeFrom(configBase)); err != nil {
+		return err
+	}
+	return nil
 }
 
 // getSystemUUIDFromServer fetches the UUID from the referenced Server object.
