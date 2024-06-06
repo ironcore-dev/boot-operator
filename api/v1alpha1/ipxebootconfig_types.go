@@ -14,8 +14,8 @@ import (
 // IPXEBootConfigSpec defines the desired state of IPXEBootConfig
 type IPXEBootConfigSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	SystemUUID string `json:"systemUUID,omitempty"`
-	SystemIP   string `json:"systemIP,omitempty"` // TODO: Add the custom serialization. For now validate at the controller.
+	SystemUUID string   `json:"systemUUID,omitempty"`
+	SystemIPs  []string `json:"systemIPs,omitempty"` // TODO: Add the custom serialization. For now validate at the controller.
 	// TODO: remove image as this is not needed
 	Image       string `json:"image,omitempty"`
 	KernelURL   string `json:"kernelURL,omitempty"`
@@ -34,9 +34,6 @@ const (
 	IPXEBootConfigStatePending IPXEBootConfigState = "Pending"
 	IPXEBootConfigStateError   IPXEBootConfigState = "Error"
 )
-
-const DefaultIgnitionKey = "ignition"
-const DefaultIPXEScriptKey = "ipxe-script"
 
 // IPXEBootConfigStatus defines the observed state of IPXEBootConfig
 type IPXEBootConfigStatus struct {
@@ -67,6 +64,13 @@ type IPXEBootConfigList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []IPXEBootConfig `json:"items"`
 }
+
+const (
+	DefaultIgnitionKey   = "ignition"
+	DefaultIPXEScriptKey = "ipxe-script"
+	SystemUUIDIndexKey   = "spec.systemUUID"
+	SystemIPIndexKey     = "spec.systemIPs"
+)
 
 func init() {
 	SchemeBuilder.Register(&IPXEBootConfig{}, &IPXEBootConfigList{})

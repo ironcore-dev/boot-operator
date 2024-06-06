@@ -87,7 +87,7 @@ func (r *IPXEBootConfigReconciler) ensureIgnition(ctx context.Context, _ logr.Lo
 	return bootv1alpha1.IPXEBootConfigStateReady, nil
 }
 
-func (r *IPXEBootConfigReconciler) delete(_ context.Context, log logr.Logger, ipxeBootConfig *bootv1alpha1.IPXEBootConfig) (ctrl.Result, error) {
+func (r *IPXEBootConfigReconciler) delete(_ context.Context, log logr.Logger, _ *bootv1alpha1.IPXEBootConfig) (ctrl.Result, error) {
 	log.V(1).Info("Deleting ipxeBootConfig")
 
 	// TODO

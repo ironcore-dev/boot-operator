@@ -40,11 +40,6 @@ var (
 )
 
 const (
-	systemUUIDIndexKey = "spec.systemUUID"
-	systemIPIndexKey   = "spec.systemIP"
-)
-
-const (
 	// core controllers
 	ipxeBootConfigController   = "ipxebootconfig"
 	serverBootConfigController = "serverbootconfig"
@@ -223,12 +218,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := IndexIPXEBootConfigBySystemIP(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to set up indexer for IPXEBootConfig SystemIP")
+	if err := IndexIPXEBootConfigBySystemIPs(ctx, mgr); err != nil {
+		setupLog.Error(err, "unable to set up indexer for IPXEBootConfig SystemIPs")
 		os.Exit(1)
 	}
 
-	if err := IndexHTTPBootConfigBySystemIP(ctx, mgr); err != nil {
+	if err := IndexHTTPBootConfigBySystemIPs(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to set up indexer for HTTPBootConfig SystemIP")
 		os.Exit(1)
 	}
@@ -250,7 +245,7 @@ func IndexIPXEBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) erro
 	return mgr.GetFieldIndexer().IndexField(
 		ctx,
 		&bootv1alpha1.IPXEBootConfig{},
-		systemUUIDIndexKey,
+		bootv1alpha1.SystemUUIDIndexKey,
 		func(Obj client.Object) []string {
 			ipxeBootConfig := Obj.(*bootv1alpha1.IPXEBootConfig)
 			return []string{ipxeBootConfig.Spec.SystemUUID}
@@ -258,13 +253,13 @@ func IndexIPXEBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) erro
 	)
 }
 
-func IndexIPXEBootConfigBySystemIP(ctx context.Context, mgr ctrl.Manager) error {
+func IndexIPXEBootConfigBySystemIPs(ctx context.Context, mgr ctrl.Manager) error {
 	return mgr.GetFieldIndexer().IndexField(
 		ctx, &bootv1alpha1.IPXEBootConfig{},
-		systemIPIndexKey,
+		bootv1alpha1.SystemIPIndexKey,
 		func(Obj client.Object) []string {
 			ipxeBootConfig := Obj.(*bootv1alpha1.IPXEBootConfig)
-			return []string{ipxeBootConfig.Spec.SystemIP}
+			return ipxeBootConfig.Spec.SystemIPs
 		},
 	)
 }
@@ -273,7 +268,7 @@ func IndexHTTPBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) erro
 	return mgr.GetFieldIndexer().IndexField(
 		ctx,
 		&bootv1alpha1.HTTPBootConfig{},
-		systemUUIDIndexKey,
+		bootv1alpha1.SystemUUIDIndexKey,
 		func(Obj client.Object) []string {
 			HTTPBootConfig := Obj.(*bootv1alpha1.HTTPBootConfig)
 			return []string{HTTPBootConfig.Spec.SystemUUID}
@@ -281,14 +276,14 @@ func IndexHTTPBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) erro
 	)
 }
 
-func IndexHTTPBootConfigBySystemIP(ctx context.Context, mgr ctrl.Manager) error {
+func IndexHTTPBootConfigBySystemIPs(ctx context.Context, mgr ctrl.Manager) error {
 	return mgr.GetFieldIndexer().IndexField(
 		ctx,
 		&bootv1alpha1.HTTPBootConfig{},
-		systemIPIndexKey,
+		bootv1alpha1.SystemIPIndexKey,
 		func(Obj client.Object) []string {
 			HTTPBootConfig := Obj.(*bootv1alpha1.HTTPBootConfig)
-			return []string{HTTPBootConfig.Spec.SystemIP}
+			return HTTPBootConfig.Spec.SystemIPs
 		},
 	)
 }
