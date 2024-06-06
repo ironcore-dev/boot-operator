@@ -151,9 +151,10 @@ func (r *ServerBootConfigurationHTTPReconciler) getSystemIPFromServer(ctx contex
 		return nil, fmt.Errorf("failed to get Server: %w", err)
 	}
 
-	systemIPs := make([]string, len(server.Status.NetworkInterfaces))
-	for i, nic := range server.Status.NetworkInterfaces {
-		systemIPs[i] = nic.IP.String() // Ensure the IP address format is handled correctly
+	var systemIPs []string
+	for _, nic := range server.Status.NetworkInterfaces {
+		systemIPs = append(systemIPs, nic.IP.String())
+		systemIPs = append(systemIPs, nic.MACAddress)
 	}
 	return systemIPs, nil
 }

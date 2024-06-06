@@ -171,10 +171,9 @@ func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx con
 	systemIPs := []string{}
 	for _, nic := range server.Status.NetworkInterfaces {
 		systemIPs = append(systemIPs, nic.IP.String())
-		return systemIPs, nil
 	}
 
-	return nil, nil
+	return systemIPs, nil
 }
 
 func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
