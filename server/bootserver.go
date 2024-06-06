@@ -292,6 +292,7 @@ func handleHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Cli
 				clientIPs = append(clientIPs, trimmedIP)
 			}
 		}
+		log.Info("X-Forwarded-For Header Found in the Request", "method", r.Method, "path", r.URL.Path, "clientIPs", clientIPs)
 	}
 
 	var httpBootConfigs bootv1alpha1.HTTPBootConfigList
@@ -309,7 +310,7 @@ func handleHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Cli
 
 	var httpBootResponseData map[string]string
 	if len(httpBootConfigs.Items) == 0 {
-		log.Info("No HTTPBootConfig found for client IP, delivering default httpboot data", "clientIP", clientIP)
+		log.Info("No HTTPBootConfig found for client IP, delivering default httpboot data", "clientIPs", clientIPs)
 		httpBootResponseData = map[string]string{
 			"ClientIPs": strings.Join(clientIPs, ","),
 			"UKIURL":    defaultUKIURL,
