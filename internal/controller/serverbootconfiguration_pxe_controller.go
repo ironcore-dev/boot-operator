@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type ServerBootConfigurationReconciler struct {
+type ServerBootConfigurationPXEReconciler struct {
 	client.Client
 	Scheme         *runtime.Scheme
 	IPXEServiceURL string
@@ -49,7 +49,7 @@ type ServerBootConfigurationReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *ServerBootConfigurationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ServerBootConfigurationPXEReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 	bootConfig := &metalv1alpha1.ServerBootConfiguration{}
 	if err := r.Get(ctx, req.NamespacedName, bootConfig); err != nil {
@@ -59,18 +59,18 @@ func (r *ServerBootConfigurationReconciler) Reconcile(ctx context.Context, req c
 	return r.reconcileExists(ctx, log, bootConfig)
 }
 
-func (r *ServerBootConfigurationReconciler) reconcileExists(ctx context.Context, log logr.Logger, config *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
+func (r *ServerBootConfigurationPXEReconciler) reconcileExists(ctx context.Context, log logr.Logger, config *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
 	if !config.DeletionTimestamp.IsZero() {
 		return r.delete(ctx, log, config)
 	}
 	return r.reconcile(ctx, log, config)
 }
 
-func (r *ServerBootConfigurationReconciler) delete(ctx context.Context, log logr.Logger, config *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
+func (r *ServerBootConfigurationPXEReconciler) delete(ctx context.Context, log logr.Logger, config *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func (r *ServerBootConfigurationReconciler) reconcile(ctx context.Context, log logr.Logger, config *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
+func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, log logr.Logger, config *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
 	log.V(1).Info("Reconciling ServerBootConfiguration")
 
 	systemUUID, err := r.getSystemUUIDFromBootConfig(ctx, config)
@@ -133,7 +133,7 @@ func (r *ServerBootConfigurationReconciler) reconcile(ctx context.Context, log l
 	return ctrl.Result{}, nil
 }
 
-func (r *ServerBootConfigurationReconciler) patchConfigStateFromIPXEState(ctx context.Context, ipxeConfig *v1alpha1.IPXEBootConfig, config *metalv1alpha1.ServerBootConfiguration) error {
+func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx context.Context, ipxeConfig *v1alpha1.IPXEBootConfig, config *metalv1alpha1.ServerBootConfiguration) error {
 	if ipxeConfig.Status.State == v1alpha1.IPXEBootConfigStateReady {
 		return r.patchState(ctx, config, metalv1alpha1.ServerBootConfigurationStateReady)
 	}
@@ -144,7 +144,7 @@ func (r *ServerBootConfigurationReconciler) patchConfigStateFromIPXEState(ctx co
 	return nil
 }
 
-func (r *ServerBootConfigurationReconciler) patchState(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration, state metalv1alpha1.ServerBootConfigurationState) error {
+func (r *ServerBootConfigurationPXEReconciler) patchState(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration, state metalv1alpha1.ServerBootConfigurationState) error {
 	configBase := config.DeepCopy()
 	config.Status.State = state
 	if err := r.Status().Patch(ctx, config, client.MergeFrom(configBase)); err != nil {
@@ -153,7 +153,7 @@ func (r *ServerBootConfigurationReconciler) patchState(ctx context.Context, conf
 	return nil
 }
 
-func (r *ServerBootConfigurationReconciler) getSystemUUIDFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {
+func (r *ServerBootConfigurationPXEReconciler) getSystemUUIDFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {
 	server := &metalv1alpha1.Server{}
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
 		return "", fmt.Errorf("failed to get Server: %w", err)
@@ -162,7 +162,7 @@ func (r *ServerBootConfigurationReconciler) getSystemUUIDFromBootConfig(ctx cont
 	return server.Spec.UUID, nil
 }
 
-func (r *ServerBootConfigurationReconciler) getSystemIPFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) ([]string, error) {
+func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) ([]string, error) {
 	server := &metalv1alpha1.Server{}
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
 		return nil, fmt.Errorf("failed to get Server: %w", err)
@@ -177,7 +177,7 @@ func (r *ServerBootConfigurationReconciler) getSystemIPFromBootConfig(ctx contex
 	return nil, nil
 }
 
-func (r *ServerBootConfigurationReconciler) getImageDetailsFromConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
+func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
 	imageDetails := strings.Split(config.Spec.Image, ":")
 	if len(imageDetails) != 2 {
 		return "", "", "", fmt.Errorf("invalid image format")
@@ -192,7 +192,7 @@ func (r *ServerBootConfigurationReconciler) getImageDetailsFromConfig(ctx contex
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ServerBootConfigurationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ServerBootConfigurationPXEReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metalv1alpha1.ServerBootConfiguration{}).
 		Owns(&v1alpha1.IPXEBootConfig{}).

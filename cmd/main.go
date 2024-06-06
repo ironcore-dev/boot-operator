@@ -70,10 +70,12 @@ func main() {
 	var ipxeServiceURL string
 	var ipxeServiceProtocol string
 	var ipxeServicePort int
+	var imageServerURL string
 
 	flag.IntVar(&ipxeServicePort, "ipxe-service-port", 5000, "IPXE Service port to listen on.")
 	flag.StringVar(&ipxeServiceProtocol, "ipxe-service-protocol", "http", "IPXE Service Protocol.")
 	flag.StringVar(&ipxeServiceURL, "ipxe-service-url", "", "IPXE Service URL.")
+	flag.StringVar(&imageServerURL, "image-server-url", "", "OS Image Server URL.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&ipxeServerAddr, "ipxe-server-address", ":8082", "The address the ipxe-server binds to.")
@@ -179,7 +181,7 @@ func main() {
 	}
 
 	if controllers.Enabled(serverBootConfigControllerPxe) {
-		if err = (&controller.ServerBootConfigurationReconciler{ // TODO: Fix this, add pxe hint.
+		if err = (&controller.ServerBootConfigurationPXEReconciler{
 			Client:         mgr.GetClient(),
 			Scheme:         mgr.GetScheme(),
 			IPXEServiceURL: ipxeServiceURL,
@@ -191,8 +193,9 @@ func main() {
 
 	if controllers.Enabled(serverBootConfigControllerHttp) {
 		if err = (&controller.ServerBootConfigurationHTTPReconciler{
-			Client: mgr.GetClient(),
-			Scheme: mgr.GetScheme(),
+			Client:         mgr.GetClient(),
+			Scheme:         mgr.GetScheme(),
+			ImageServerURL: imageServerURL,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigHttp")
 			os.Exit(1)
