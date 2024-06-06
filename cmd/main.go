@@ -41,9 +41,10 @@ var (
 
 const (
 	// core controllers
-	ipxeBootConfigController   = "ipxebootconfig"
-	serverBootConfigController = "serverbootconfig"
-	httpBootConfigController   = "httpbootconfig"
+	ipxeBootConfigController       = "ipxebootconfig"
+	serverBootConfigControllerPxe  = "serverbootconfigpxe"
+	httpBootConfigController       = "httpbootconfig"
+	serverBootConfigControllerHttp = "serverbootconfighttp"
 )
 
 func init() {
@@ -88,7 +89,8 @@ func main() {
 	controllers := switches.New(
 		// core controllers
 		ipxeBootConfigController,
-		serverBootConfigController,
+		serverBootConfigControllerPxe,
+		serverBootConfigControllerHttp,
 		httpBootConfigController,
 	)
 
@@ -176,13 +178,23 @@ func main() {
 		}
 	}
 
-	if controllers.Enabled(serverBootConfigController) {
-		if err = (&controller.ServerBootConfigurationReconciler{
+	if controllers.Enabled(serverBootConfigControllerPxe) {
+		if err = (&controller.ServerBootConfigurationReconciler{ // TODO: Fix this, add pxe hint.
 			Client:         mgr.GetClient(),
 			Scheme:         mgr.GetScheme(),
 			IPXEServiceURL: ipxeServiceURL,
 		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfig")
+			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigPxe")
+			os.Exit(1)
+		}
+	}
+
+	if controllers.Enabled(serverBootConfigControllerHttp) {
+		if err = (&controller.ServerBootConfigurationHTTPReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigHttp")
 			os.Exit(1)
 		}
 	}
