@@ -41,9 +41,10 @@ var (
 
 const (
 	// core controllers
-	ipxeBootConfigController   = "ipxebootconfig"
-	serverBootConfigController = "serverbootconfig"
-	httpBootConfigController   = "httpbootconfig"
+	ipxeBootConfigController       = "ipxebootconfig"
+	serverBootConfigControllerPxe  = "serverbootconfigpxe"
+	httpBootConfigController       = "httpbootconfig"
+	serverBootConfigControllerHttp = "serverbootconfighttp"
 )
 
 func init() {
@@ -69,10 +70,12 @@ func main() {
 	var ipxeServiceURL string
 	var ipxeServiceProtocol string
 	var ipxeServicePort int
+	var imageServerURL string
 
 	flag.IntVar(&ipxeServicePort, "ipxe-service-port", 5000, "IPXE Service port to listen on.")
 	flag.StringVar(&ipxeServiceProtocol, "ipxe-service-protocol", "http", "IPXE Service Protocol.")
 	flag.StringVar(&ipxeServiceURL, "ipxe-service-url", "", "IPXE Service URL.")
+	flag.StringVar(&imageServerURL, "image-server-url", "", "OS Image Server URL.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&ipxeServerAddr, "ipxe-server-address", ":8082", "The address the ipxe-server binds to.")
@@ -88,7 +91,8 @@ func main() {
 	controllers := switches.New(
 		// core controllers
 		ipxeBootConfigController,
-		serverBootConfigController,
+		serverBootConfigControllerPxe,
+		serverBootConfigControllerHttp,
 		httpBootConfigController,
 	)
 
@@ -176,13 +180,24 @@ func main() {
 		}
 	}
 
-	if controllers.Enabled(serverBootConfigController) {
-		if err = (&controller.ServerBootConfigurationReconciler{
+	if controllers.Enabled(serverBootConfigControllerPxe) {
+		if err = (&controller.ServerBootConfigurationPXEReconciler{
 			Client:         mgr.GetClient(),
 			Scheme:         mgr.GetScheme(),
 			IPXEServiceURL: ipxeServiceURL,
 		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfig")
+			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigPxe")
+			os.Exit(1)
+		}
+	}
+
+	if controllers.Enabled(serverBootConfigControllerHttp) {
+		if err = (&controller.ServerBootConfigurationHTTPReconciler{
+			Client:         mgr.GetClient(),
+			Scheme:         mgr.GetScheme(),
+			ImageServerURL: imageServerURL,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigHttp")
 			os.Exit(1)
 		}
 	}
