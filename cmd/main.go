@@ -57,7 +57,6 @@ func init() {
 
 func main() {
 	ctx := ctrl.LoggerInto(ctrl.SetupSignalHandler(), setupLog)
-	defaultIpxeTemplateData := NewDefaultIPXETemplateData()
 	defaultHttpUKIURL := NewDefaultHTTPBootData()
 
 	var metricsAddr string
@@ -65,21 +64,9 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
-	var ipxeServerAddr string
-	var imageProxyServerAddr string
-	var ipxeServiceURL string
-	var ipxeServiceProtocol string
-	var ipxeServicePort int
-	var imageServerURL string
 
-	flag.IntVar(&ipxeServicePort, "ipxe-service-port", 5000, "IPXE Service port to listen on.")
-	flag.StringVar(&ipxeServiceProtocol, "ipxe-service-protocol", "http", "IPXE Service Protocol.")
-	flag.StringVar(&ipxeServiceURL, "ipxe-service-url", "", "IPXE Service URL.")
-	flag.StringVar(&imageServerURL, "image-server-url", "", "OS Image Server URL.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.StringVar(&ipxeServerAddr, "ipxe-server-address", ":8082", "The address the ipxe-server binds to.")
-	flag.StringVar(&imageProxyServerAddr, "image-proxy-server-address", ":8083", "The address the image-proxy-server binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -90,8 +77,6 @@ func main() {
 
 	controllers := switches.New(
 		// core controllers
-		ipxeBootConfigController,
-		serverBootConfigControllerPxe,
 		serverBootConfigControllerHttp,
 		httpBootConfigController,
 	)
@@ -110,17 +95,6 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-
-	// set the correct ipxe service URL by getting the address from the environment
-	var ipxeServiceAddr string
-	if ipxeServiceURL == "" {
-		ipxeServiceAddr = os.Getenv("IPXE_SERVER_ADDRESS")
-		if ipxeServiceAddr == "" {
-			setupLog.Error(nil, "failed to set the ipxe service URL as no address is provided")
-			os.Exit(1)
-		}
-		ipxeServiceURL = fmt.Sprintf("%s://%s:%d", ipxeServiceProtocol, ipxeServiceAddr, ipxeServicePort)
-	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -170,27 +144,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	if controllers.Enabled(ipxeBootConfigController) {
-		if err = (&controller.IPXEBootConfigReconciler{
-			Client: mgr.GetClient(),
-			Scheme: mgr.GetScheme(),
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "IPXEBootConfig")
-			os.Exit(1)
-		}
-	}
-
-	if controllers.Enabled(serverBootConfigControllerPxe) {
-		if err = (&controller.ServerBootConfigurationPXEReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			IPXEServiceURL: ipxeServiceURL,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigPxe")
-			os.Exit(1)
-		}
-	}
-
 	if controllers.Enabled(serverBootConfigControllerHttp) {
 		if err = (&controller.ServerBootConfigurationHTTPReconciler{
 			Client:         mgr.GetClient(),
@@ -223,18 +176,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := IndexIPXEBootConfigBySystemUUID(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to set up indexer for IPXEBootConfig SystemUUID")
-		os.Exit(1)
-	}
-
 	if err := IndexHTTPBootConfigBySystemUUID(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to set up indexer for HTTPBootConfig SystemUUID")
-		os.Exit(1)
-	}
-
-	if err := IndexIPXEBootConfigBySystemIPs(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to set up indexer for IPXEBootConfig SystemIPs")
 		os.Exit(1)
 	}
 
@@ -246,37 +189,11 @@ func main() {
 	setupLog.Info("starting boot-server")
 	go bootserver.RunBootServer(ipxeServerAddr, ipxeServiceURL, mgr.GetClient(), serverLog.WithName("bootserver"), *defaultIpxeTemplateData, *defaultHttpUKIURL)
 
-	setupLog.Info("starting image-proxy-server")
-	go bootserver.RunImageProxyServer(imageProxyServerAddr, mgr.GetClient(), serverLog.WithName("imageproxyserver"))
-
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
-
-func IndexIPXEBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) error {
-	return mgr.GetFieldIndexer().IndexField(
-		ctx,
-		&bootv1alpha1.IPXEBootConfig{},
-		bootv1alpha1.SystemUUIDIndexKey,
-		func(Obj client.Object) []string {
-			ipxeBootConfig := Obj.(*bootv1alpha1.IPXEBootConfig)
-			return []string{ipxeBootConfig.Spec.SystemUUID}
-		},
-	)
-}
-
-func IndexIPXEBootConfigBySystemIPs(ctx context.Context, mgr ctrl.Manager) error {
-	return mgr.GetFieldIndexer().IndexField(
-		ctx, &bootv1alpha1.IPXEBootConfig{},
-		bootv1alpha1.SystemIPIndexKey,
-		func(Obj client.Object) []string {
-			ipxeBootConfig := Obj.(*bootv1alpha1.IPXEBootConfig)
-			return ipxeBootConfig.Spec.SystemIPs
-		},
-	)
 }
 
 func IndexHTTPBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) error {
@@ -301,16 +218,6 @@ func IndexHTTPBootConfigBySystemIPs(ctx context.Context, mgr ctrl.Manager) error
 			return HTTPBootConfig.Spec.SystemIPs
 		},
 	)
-}
-
-func NewDefaultIPXETemplateData() *bootserver.IPXETemplateData {
-	var cfg bootserver.IPXETemplateData
-	flag.StringVar(&cfg.KernelURL, "default-kernel-url", "", "Default URL for the kernel")
-	flag.StringVar(&cfg.InitrdURL, "default-initrd-url", "", "Default URL for the initrd")
-	flag.StringVar(&cfg.SquashfsURL, "default-squashfs-url", "", "Default URL for the squashfs")
-	flag.StringVar(&cfg.IPXEServerURL, "default-ipxe-server-url", "", "Default IPXE Server URL to while generating ipxe-script")
-
-	return &cfg
 }
 
 func NewDefaultHTTPBootData() *string {
