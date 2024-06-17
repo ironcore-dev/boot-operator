@@ -20,7 +20,7 @@ import (
 	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
 )
 
-func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultIpxeTemplateData IPXETemplateData, defaultUKIURL string) {
+func RunBootServer(k8sClient client.Client, log logr.Logger, bootserverAddr string, defaultUKIURL string) {
 	http.HandleFunc("/httpboot", func(w http.ResponseWriter, r *http.Request) {
 		handleHTTPBoot(w, r, k8sClient, log, defaultUKIURL)
 	})
@@ -34,8 +34,8 @@ func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient clien
 		handleIgnitionHTTPBoot(w, r, k8sClient, log, uuid)
 	})
 
-	log.Info("Starting boot server", "address", ipxeServerAddr)
-	if err := http.ListenAndServe(ipxeServerAddr, nil); err != nil {
+	log.Info("Starting boot server", "address", bootserverAddr)
+	if err := http.ListenAndServe(bootserverAddr, nil); err != nil {
 		log.Error(err, "failed to start boot server")
 		panic(err)
 	}

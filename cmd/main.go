@@ -41,7 +41,6 @@ var (
 
 const (
 	// core controllers
-	ipxeBootConfigController       = "ipxebootconfig"
 	serverBootConfigControllerPxe  = "serverbootconfigpxe"
 	httpBootConfigController       = "httpbootconfig"
 	serverBootConfigControllerHttp = "serverbootconfighttp"
@@ -64,9 +63,13 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var bootserverAddr string
+	var imageServerURL string
 
+	flag.StringVar(&imageServerURL, "image-server-url", "", "OS Image Server URL.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.StringVar(&bootserverAddr, "boot-server-address", ":8082", "The address the ipxe-server binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -187,7 +190,7 @@ func main() {
 	}
 
 	setupLog.Info("starting boot-server")
-	go bootserver.RunBootServer(ipxeServerAddr, ipxeServiceURL, mgr.GetClient(), serverLog.WithName("bootserver"), *defaultIpxeTemplateData, *defaultHttpUKIURL)
+	go bootserver.RunBootServer(mgr.GetClient(), serverLog.WithName("bootserver"), bootserverAddr, *defaultHttpUKIURL)
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {
