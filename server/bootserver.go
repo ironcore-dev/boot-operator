@@ -17,7 +17,7 @@ import (
 	butaneconfig "github.com/coreos/butane/config"
 	butanecommon "github.com/coreos/butane/config/common"
 	"github.com/go-logr/logr"
-	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
+	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 )
 
 func RunBootServer(k8sClient client.Client, log logr.Logger, bootserverAddr string, defaultUKIURL string) {

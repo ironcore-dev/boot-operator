@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: ipxe-operator
+Upstream-Name: boot-operator
 Upstream-Contact: IronCore authors <ospo@sap.com>
-Source: https://github.com/ironcore-dev/ipxe-operator
+Source: https://github.com/ironcore-dev/boot-operator
 
 # --------------------------------------------------
 # source code

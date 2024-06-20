@@ -1,24 +1,24 @@
-# ipxe-operator
+# boot-operator
 
-[![REUSE status](https://api.reuse.software/badge/github.com/ironcore-dev/ipxe-operator)](https://api.reuse.software/info/github.com/ironcore-dev/ipxe-operator)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ironcore-dev/ipxe-operator)](https://goreportcard.com/report/github.com/ironcore-dev/ipxe-operator)
+[![REUSE status](https://api.reuse.software/badge/github.com/ironcore-dev/boot-operator)](https://api.reuse.software/info/github.com/ironcore-dev/boot-operator)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ironcore-dev/boot-operator)](https://goreportcard.com/report/github.com/ironcore-dev/boot-operator)
 [![GitHub License](https://img.shields.io/static/v1?label=License&message=Apache-2.0&color=blue)](LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://makeapullrequest.com)
 
-The iPXE Operator is a Kubernetes controller designed to streamline the management of iPXE infrastructure within Kubernetes environments. This operator simplifies network booting processes by automating iPXE script generation and ignition content delivery based on Kubernetes Custom Resource Definitions (CRDs).
+The Boot Operator is a Kubernetes controller designed to streamline the management of Boot infrastructure such as HTTPBoot within Kubernetes environments. This operator simplifies network booting processes by automating HTTPBoot UKI URL generation and ignition content delivery based on Kubernetes Custom Resource Definitions (CRDs).
 
 ## Key Components
-- __IPXE HTTP Server__: Serves dynamic iPXE scripts and ignition content through HTTP endpoints, tailored to individual machine specifications.
+- __HTTP Boot Server__: Serves dynamic HTTP Boot Responses and ignition content through HTTP endpoints, tailored to individual machine specifications.
 
-- __Reconciler__: Configures the IPXE HTTP Server based on the desired state specified in `IPXEBootConfiguration` CRDs, ensuring the server's configuration aligns with cluster resources.
+- __Reconciler__: Configures the HTTP Server based on the desired state specified in `HTTPBootConfig` CRs, ensuring the server's configuration aligns with cluster resources.
 
-- __Translator (Optional)__: Converts `BootConfiguration` CustomResources from MetalAPI provided by `Ironcore` into the format expected by the iPXE Operator, enhancing integration capabilities.
+- __Translator (Optional)__: Converts `BootConfig` CustomResources from MetalAPI provided by `Ironcore` into the format expected by the HTTPBoot Operator, enhancing integration capabilities.
 
 
 ## HTTP Server Endpoints
-- `/ignition/{UUID}`: Matches an `IPXEBootConfiguration` using the provided `{UUID}` (Spec.systemUUID) and serves the associated ignition content.
+- `/ignition/{UUID}`: Matches an `HTTPBootConfig` using the provided `{UUID}` (Spec.systemUUID) and serves the associated ignition content.
 
-- `/ipxe`: Identifies the corresponding `IPXEBootConfiguration` based on the requester's system IP (Spec.SystemIP). It then renders the `templates/ipxe-script.tpl` with values from the CRD (e.g., KernelURL, InitrdURL, SquashfsURL) and returns the customized iPXE script.
+- `/httpboot`: Identifies the corresponding `HTTPBootConfig` based on the requester's system IP (Spec.SystemIP). It then returns the customized UKIURL associated with the `HTTPBootConfig`.
 
 ## Getting Started
 
@@ -32,7 +32,7 @@ The iPXE Operator is a Kubernetes controller designed to streamline the manageme
 **Build and push your image to the location specified by `IMG`:**
 
 ```sh
-make docker-build docker-push IMG=<some-registry>/ipxe-operator:tag
+make docker-build docker-push IMG=<some-registry>/boot-operator:tag
 ```
 
 **NOTE:** This image ought to be published in the personal registry you specified. 
@@ -48,7 +48,7 @@ make install
 **Deploy the Manager to the cluster with the image specified by `IMG`:**
 
 ```sh
-make deploy IMG=<some-registry>/ipxe-operator:tag
+make deploy IMG=<some-registry>/boot-operator:tag
 ```
 
 > **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin 
@@ -89,7 +89,7 @@ Following are the steps to build the installer and distribute this project to us
 1. Build the installer for the image built and published in the registry:
 
 ```sh
-make build-installer IMG=<some-registry>/ipxe-operator:tag
+make build-installer IMG=<some-registry>/boot-operator:tag
 ```
 
 NOTE: The makefile target mentioned above generates an 'install.yaml'
@@ -102,7 +102,7 @@ its dependencies.
 Users can just run kubectl apply -f <URL for YAML BUNDLE> to install the project, i.e.:
 
 ```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/ipxe-operator/<tag or branch>/dist/install.yaml
+kubectl apply -f https://raw.githubusercontent.com/<org>/boot-operator/<tag or branch>/dist/install.yaml
 ```
 
 **NOTE:** Run `make help` for more information on all potential `make` targets
@@ -111,7 +111,7 @@ More information can be found via the [Kubebuilder Documentation](https://book.k
 
 
 ## Roadmap
-Looking ahead, the iPXE Operator aims to introduce a range of enhancements to further empower Kubernetes-driven infrastructure provisioning:
+Looking ahead, the boot-Operator aims to introduce a range of enhancements to further empower Kubernetes-driven infrastructure provisioning:
 
 - Configurable iPXE Scripts: Enable customization of iPXE script templates to accommodate diverse booting requirements.
 

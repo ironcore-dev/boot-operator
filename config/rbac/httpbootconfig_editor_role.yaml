@@ -6,8 +6,8 @@ metadata:
     app.kubernetes.io/name: clusterrole
     app.kubernetes.io/instance: httpbootconfig-editor-role
     app.kubernetes.io/component: rbac
-    app.kubernetes.io/created-by: ipxe-operator
-    app.kubernetes.io/part-of: ipxe-operator
+    app.kubernetes.io/created-by: boot-operator
+    app.kubernetes.io/part-of: boot-operator
     app.kubernetes.io/managed-by: kustomize
   name: httpbootconfig-editor-role
 rules:

@@ -6,8 +6,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	"github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
-	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
+	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -115,7 +114,7 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 	return ctrl.Result{}, nil
 }
 
-func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ctx context.Context, httpBootConfig *v1alpha1.HTTPBootConfig, config *metalv1alpha1.ServerBootConfiguration) error {
+func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ctx context.Context, httpBootConfig *bootv1alpha1.HTTPBootConfig, config *metalv1alpha1.ServerBootConfiguration) error {
 	if httpBootConfig.Status.State == bootv1alpha1.HTTPBootConfigStateReady {
 		return r.patchState(ctx, config, metalv1alpha1.ServerBootConfigurationStateReady)
 	}
@@ -175,6 +174,6 @@ func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(image string) (s
 func (r *ServerBootConfigurationHTTPReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metalv1alpha1.ServerBootConfiguration{}).
-		Owns(&v1alpha1.HTTPBootConfig{}).
+		Owns(&bootv1alpha1.HTTPBootConfig{}).
 		Complete(r)
 }

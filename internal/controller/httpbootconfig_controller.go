@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
-	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
+	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 )
 
 // HTTPBootConfigReconciler reconciles a HTTPBootConfig object

@@ -11,10 +11,10 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/ironcore-dev/ipxe-operator/test/utils"
+	"github.com/ironcore-dev/boot-operator/test/utils"
 )
 
-const namespace = "ipxe-operator-system"
+const namespace = "boot-operator-system"
 
 var _ = Describe("controller", Ordered, func() {
 	BeforeAll(func() {
@@ -47,7 +47,7 @@ var _ = Describe("controller", Ordered, func() {
 			var err error
 
 			// projectimage stores the name of the image used in the example
-			var projectimage = "example.com/ipxe-operator:v0.0.1"
+			var projectimage = "example.com/boot-operator:v0.0.1"
 
 			By("building the manager(Operator) image")
 			cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectimage))
