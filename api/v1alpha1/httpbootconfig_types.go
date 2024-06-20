@@ -53,6 +53,12 @@ type HTTPBootConfigList struct {
 	Items           []HTTPBootConfig `json:"items"`
 }
 
+const (
+	DefaultIgnitionKey = "ignition"
+	SystemUUIDIndexKey = "spec.systemUUID"
+	SystemIPIndexKey   = "spec.systemIPs"
+)
+
 func init() {
 	SchemeBuilder.Register(&HTTPBootConfig{}, &HTTPBootConfigList{})
 }
