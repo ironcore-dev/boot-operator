@@ -27,9 +27,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
-	"github.com/ironcore-dev/ipxe-operator/internal/controller"
-	bootserver "github.com/ironcore-dev/ipxe-operator/server"
+	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	"github.com/ironcore-dev/boot-operator/internal/controller"
+	bootserver "github.com/ironcore-dev/boot-operator/server"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -41,7 +41,6 @@ var (
 
 const (
 	// core controllers
-	serverBootConfigControllerPxe  = "serverbootconfigpxe"
 	httpBootConfigController       = "httpbootconfig"
 	serverBootConfigControllerHttp = "serverbootconfighttp"
 )
@@ -69,7 +68,7 @@ func main() {
 	flag.StringVar(&imageServerURL, "image-server-url", "", "OS Image Server URL.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.StringVar(&bootserverAddr, "boot-server-address", ":8082", "The address the ipxe-server binds to.")
+	flag.StringVar(&bootserverAddr, "boot-server-address", ":8082", "The address the boot-server binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")

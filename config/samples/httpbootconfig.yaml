@@ -4,9 +4,9 @@ metadata:
   labels:
     app.kubernetes.io/name: httpbootconfig
     app.kubernetes.io/instance: httpbootconfig-sample
-    app.kubernetes.io/part-of: ipxe-operator
+    app.kubernetes.io/part-of: boot-operator
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: ipxe-operator
+    app.kubernetes.io/created-by: boot-operator
   name: httpbootconfig-sample
 spec:
   systemUUID: 1234

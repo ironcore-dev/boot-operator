@@ -1,4 +1,4 @@
-module github.com/ironcore-dev/ipxe-operator
+module github.com/ironcore-dev/boot-operator
 
 go 1.22.2
 

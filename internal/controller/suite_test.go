@@ -29,7 +29,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
+	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 

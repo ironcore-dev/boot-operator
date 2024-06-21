@@ -14,7 +14,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	bootv1alpha1 "github.com/ironcore-dev/ipxe-operator/api/v1alpha1"
+	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 )
 
 var _ = Describe("HTTPBootConfig Controller", func() {
