@@ -75,7 +75,7 @@ func (r *HTTPBootConfigReconciler) ensureIgnition(ctx context.Context, _ logr.Lo
 	// Verify if the IgnitionRef is set, and it has the intended data key.
 	if HTTPBootConfig.Spec.IgnitionSecretRef != nil {
 		IgnitionSecret := &corev1.Secret{}
-		if err := r.Get(ctx, client.ObjectKey{Name: HTTPBootConfig.Spec.IgnitionSecretRef.Name, Namespace: HTTPBootConfig.Namespace}, IgnitionSecret); err != nil {
+		if err := r.Get(ctx, client.ObjectKey{Name: HTTPBootConfig.Spec.IgnitionSecretRef.Name, Namespace: HTTPBootConfig.Spec.IgnitionSecretRef.Namespace}, IgnitionSecret); err != nil {
 			return bootv1alpha1.HTTPBootConfigStateError, err
 			// TODO: Add some validation steps to ensure that the IgntionData is compliant, if necessary.
 			// Assume for now, that it's going to json format.
