@@ -22,8 +22,9 @@ import (
 
 type MachineBootConfigurationHTTPReconciler struct {
 	client.Client
-	Scheme         *runtime.Scheme
-	ImageServerURL string
+	Scheme              *runtime.Scheme
+	ImageServerURL      string
+	BootConfigNamespace string
 }
 
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=bootconfigurations,verbs=get;list;watch
@@ -82,7 +83,7 @@ func (r *MachineBootConfigurationHTTPReconciler) reconcile(ctx context.Context, 
 			Kind:       "HTTPBootConfig",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: config.Namespace,
+			Namespace: r.BootConfigNamespace,
 			Name:      config.Name,
 		},
 		Spec: bootv1alpha1.HTTPBootConfigSpec{
@@ -103,7 +104,7 @@ func (r *MachineBootConfigurationHTTPReconciler) reconcile(ctx context.Context, 
 	}
 	log.V(1).Info("Applied HTTPBoot config for machine boot configuration")
 
-	if err := r.Get(ctx, client.ObjectKey{Namespace: config.Namespace, Name: config.Name}, httpBootConfig); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: r.BootConfigNamespace, Name: config.Name}, httpBootConfig); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get HTTPBoot config: %w", err)
 	}
 

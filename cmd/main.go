@@ -67,11 +67,13 @@ func main() {
 	var enableHTTP2 bool
 	var bootserverAddr string
 	var imageServerURL string
+	var bootconfigNamespace string
 
 	flag.StringVar(&imageServerURL, "image-server-url", "", "OS Image Server URL.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&bootserverAddr, "boot-server-address", ":8082", "The address the boot-server binds to.")
+	flag.StringVar(&bootconfigNamespace, "machinebootconfig-namespace", "default", "The namespace in which HTTPBootConfigs should be created for MachineBootConfiguration Controller.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -163,9 +165,10 @@ func main() {
 
 	if controllers.Enabled(machineBootConfigControllerHttp) {
 		if err = (&controller.MachineBootConfigurationHTTPReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			ImageServerURL: imageServerURL,
+			Client:              mgr.GetClient(),
+			Scheme:              mgr.GetScheme(),
+			ImageServerURL:      imageServerURL,
+			BootConfigNamespace: bootconfigNamespace,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "MachineBootConfigHttp")
 			os.Exit(1)
