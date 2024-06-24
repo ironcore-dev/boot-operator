@@ -7,7 +7,7 @@ require (
 	github.com/coreos/butane v0.21.0
 	github.com/go-logr/logr v1.4.2
 	github.com/ironcore-dev/controller-utils v0.9.3
-	github.com/ironcore-dev/metal v0.0.0-20240624081522-bfe4e65f0385
+	github.com/ironcore-dev/metal v0.0.0-20240624131301-18385f342755
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
 	k8s.io/api v0.30.2
