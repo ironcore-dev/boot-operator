@@ -12,6 +12,7 @@ import (
 
 	metalv1alpha1 "github.com/afritzler/metal-operator/api/v1alpha1"
 	"github.com/ironcore-dev/controller-utils/cmdutils/switches"
+	machinev1alpha1 "github.com/ironcore-dev/metal/api/v1alpha1"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -41,14 +42,16 @@ var (
 
 const (
 	// core controllers
-	httpBootConfigController       = "httpbootconfig"
-	serverBootConfigControllerHttp = "serverbootconfighttp"
+	httpBootConfigController        = "httpbootconfig"
+	serverBootConfigControllerHttp  = "serverbootconfighttp"
+	machineBootConfigControllerHttp = "machinebootconfighttp"
 )
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(metalv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(machinev1alpha1.AddToScheme(scheme))
 	utilruntime.Must(bootv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
@@ -64,11 +67,13 @@ func main() {
 	var enableHTTP2 bool
 	var bootserverAddr string
 	var imageServerURL string
+	var bootconfigNamespace string
 
 	flag.StringVar(&imageServerURL, "image-server-url", "", "OS Image Server URL.")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&bootserverAddr, "boot-server-address", ":8082", "The address the boot-server binds to.")
+	flag.StringVar(&bootconfigNamespace, "machinebootconfig-namespace", "default", "The namespace in which HTTPBootConfigs should be created for MachineBootConfiguration Controller.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -80,6 +85,7 @@ func main() {
 	controllers := switches.New(
 		// core controllers
 		serverBootConfigControllerHttp,
+		machineBootConfigControllerHttp,
 		httpBootConfigController,
 	)
 
@@ -153,6 +159,18 @@ func main() {
 			ImageServerURL: imageServerURL,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigHttp")
+			os.Exit(1)
+		}
+	}
+
+	if controllers.Enabled(machineBootConfigControllerHttp) {
+		if err = (&controller.MachineBootConfigurationHTTPReconciler{
+			Client:              mgr.GetClient(),
+			Scheme:              mgr.GetScheme(),
+			ImageServerURL:      imageServerURL,
+			BootConfigNamespace: bootconfigNamespace,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "MachineBootConfigHttp")
 			os.Exit(1)
 		}
 	}
