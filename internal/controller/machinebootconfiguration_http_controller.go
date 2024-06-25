@@ -16,6 +16,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal/api/v1alpha1"
 )
@@ -179,5 +180,6 @@ func (r *MachineBootConfigurationHTTPReconciler) SetupWithManager(mgr ctrl.Manag
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metalv1alpha1.BootConfiguration{}).
 		Owns(&bootv1alpha1.HTTPBootConfig{}).
+		WithEventFilter(predicate.ResourceVersionChangedPredicate{}).
 		Complete(r)
 }

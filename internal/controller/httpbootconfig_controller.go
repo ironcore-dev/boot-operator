@@ -112,6 +112,10 @@ func (r *HTTPBootConfigReconciler) patchStatus(
 	HTTPBootConfig *bootv1alpha1.HTTPBootConfig,
 	state bootv1alpha1.HTTPBootConfigState,
 ) error {
+	if HTTPBootConfig.Status.State == state {
+		return nil
+	}
+
 	base := HTTPBootConfig.DeepCopy()
 	HTTPBootConfig.Status.State = state
 
