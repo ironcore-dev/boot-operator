@@ -76,7 +76,7 @@ func (in *HTTPBootConfigSpec) DeepCopyInto(out *HTTPBootConfigSpec) {
 	*out = *in
 	if in.IgnitionSecretRef != nil {
 		in, out := &in.IgnitionSecretRef, &out.IgnitionSecretRef
-		*out = new(v1.LocalObjectReference)
+		*out = new(v1.ObjectReference)
 		**out = **in
 	}
 	if in.SystemIPs != nil {

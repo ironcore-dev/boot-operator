@@ -89,7 +89,7 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 			SystemUUID:        systemUUID,
 			SystemIPs:         systemIPs,
 			UKIURL:            ukiURL,
-			IgnitionSecretRef: &corev1.LocalObjectReference{Name: config.Spec.IgnitionSecretRef.Name},
+			IgnitionSecretRef: &corev1.ObjectReference{Name: config.Spec.IgnitionSecretRef.Name, Namespace: config.Namespace},
 		},
 	}
 

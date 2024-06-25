@@ -62,7 +62,7 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 	HTTPBootConfig := HTTPBootConfigList.Items[0]
 
 	ignitionSecret := &corev1.Secret{}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: HTTPBootConfig.Spec.IgnitionSecretRef.Name, Namespace: HTTPBootConfig.Namespace}, ignitionSecret); err != nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: HTTPBootConfig.Spec.IgnitionSecretRef.Name, Namespace: HTTPBootConfig.Spec.IgnitionSecretRef.Namespace}, ignitionSecret); err != nil {
 		http.Error(w, "Resource Not Found", http.StatusNotFound)
 		log.Info("Error: Failed to get Ignition secret", "error", err.Error())
 		return
