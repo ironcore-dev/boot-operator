@@ -18,7 +18,7 @@ The Boot Operator is a Kubernetes controller designed to streamline the manageme
 ## HTTP Server Endpoints
 - `/ignition/{UUID}`: Matches an `HTTPBootConfig` using the provided `{UUID}` (Spec.systemUUID) and serves the associated ignition content.
 
-- `/httpboot`: Identifies the corresponding `HTTPBootConfig` based on the requester's system IP (Spec.SystemIP). It then returns the customized UKIURL associated with the `HTTPBootConfig`.
+- `/httpboot`: Identifies the corresponding `HTTPBootConfig` based on the requester's system IP (Spec.SystemIP). It then returns the customized UKIURL associated with the `HTTPBootConfig` - nota bene: the webserver providing the UKIs should set the content-type to `application/efi` otherwise certain HTTPBoot clients might reject it.
 
 ## Getting Started
 
