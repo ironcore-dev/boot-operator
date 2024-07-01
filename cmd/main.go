@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"os"
 
-	metalv1alpha1 "github.com/afritzler/metal-operator/api/v1alpha1"
 	"github.com/ironcore-dev/controller-utils/cmdutils/switches"
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	machinev1alpha1 "github.com/ironcore-dev/metal/api/v1alpha1"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)

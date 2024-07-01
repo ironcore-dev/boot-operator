@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	metalv1alpha1 "github.com/afritzler/metal-operator/api/v1alpha1"
 	"github.com/ironcore-dev/controller-utils/modutils"
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -63,7 +63,7 @@ var _ = BeforeSuite(func() {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "..", "config", "crd", "bases"),
-			filepath.Join(modutils.Dir("github.com/afritzler/metal-operator", "config", "crd", "bases")),
+			filepath.Join(modutils.Dir("github.com/ironcore-dev/metal-operator", "config", "crd", "bases")),
 		},
 		ErrorIfCRDPathMissing: true,
 
