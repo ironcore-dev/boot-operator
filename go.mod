@@ -3,11 +3,11 @@ module github.com/ironcore-dev/boot-operator
 go 1.22.2
 
 require (
-	github.com/afritzler/metal-operator v0.0.0-20240424135741-4d378a6dc7b7
 	github.com/coreos/butane v0.21.0
 	github.com/go-logr/logr v1.4.2
 	github.com/ironcore-dev/controller-utils v0.9.3
 	github.com/ironcore-dev/metal v0.0.0-20240624131301-18385f342755
+	github.com/ironcore-dev/metal-operator v0.0.0-20240701152532-491d3d6f6ef8
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
 	k8s.io/api v0.30.2
