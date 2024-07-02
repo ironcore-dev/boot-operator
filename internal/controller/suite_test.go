@@ -124,7 +124,7 @@ func SetupTest() *corev1.Namespace {
 		Expect((&ServerBootConfigurationHTTPReconciler{
 			Client:         k8sManager.GetClient(),
 			Scheme:         k8sManager.GetScheme(),
-			ImageServerURL: "http://localhost:5000",
+			ImageServerURL: "http://localhost:5000/httpboot",
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
 		go func() {
