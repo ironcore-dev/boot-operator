@@ -1,0 +1,27 @@
+# permissions for end users to view ipxebootconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: ipxebootconfig-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: ipxe-operator
+    app.kubernetes.io/part-of: ipxe-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: ipxebootconfig-viewer-role
+rules:
+- apiGroups:
+  - boot.ironcore.dev
+  resources:
+  - ipxebootconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - boot.ironcore.dev
+  resources:
+  - ipxebootconfigs/status
+  verbs:
+  - get
