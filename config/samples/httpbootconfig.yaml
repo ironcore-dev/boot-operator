@@ -14,5 +14,7 @@ spec:
     - 1.2.3.4
   ignitionSecretRef:
     name: ignition-sample
-  ukiURL: http://1.2.3.4/uki.efi
+  kernelURL: "10.0.0.1/ipxe/rootfs.vmlinuz"
+  initrdURL: "10.0.0.1/ipxe/rootfs.initrd"
+  squashfsURL: "10.0.0.1/ipxe/root.squashfs"
   

@@ -121,6 +121,12 @@ func SetupTest() *corev1.Namespace {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
+		Expect((&ServerBootConfigurationPXEReconciler{
+			Client:         k8sManager.GetClient(),
+			Scheme:         k8sManager.GetScheme(),
+			IPXEServiceURL: "http://localhost:5000",
+		}).SetupWithManager(k8sManager)).To(Succeed())
+
 		Expect((&ServerBootConfigurationHTTPReconciler{
 			Client:         k8sManager.GetClient(),
 			Scheme:         k8sManager.GetScheme(),
