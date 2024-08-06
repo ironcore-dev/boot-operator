@@ -4,6 +4,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -14,6 +15,7 @@ import (
 	"text/template"
 
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -157,28 +159,32 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		return
 	}
 
-	// TODO: Assuming UUID is unique.
 	ipxeBootConfig := ipxeBootConfigList.Items[0]
 
-	ignitionSecret := &corev1.Secret{}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: ipxeBootConfig.Spec.IgnitionSecretRef.Name, Namespace: ipxeBootConfig.Namespace}, ignitionSecret); err != nil {
-		http.Error(w, "Resource Not Found", http.StatusNotFound)
-		log.Info("Error: Failed to get Ignition secret", "error", err.Error())
-		return
+	ignitionSecret := corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      ipxeBootConfig.Spec.IgnitionSecretRef.Name,
+			Namespace: ipxeBootConfig.Namespace,
+		},
 	}
-
-	ignitionData, ok := ignitionSecret.Data[bootv1alpha1.DefaultIgnitionKey]
-	if !ok {
-		http.Error(w, "Resource Not Found", http.StatusNotFound)
-		log.Info("Error: Ignition data not found in secret")
-		return
-	}
-
-	ignitionJSONData, err := renderIgnition(ignitionData)
+	ignitionData, ignitionFormat, err := fetchIgnitionData(ctx, k8sClient, ignitionSecret)
 	if err != nil {
-		log.Info("Failed to render the ignition data to json", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(w, "Resource Not Found", http.StatusNotFound)
+		log.Info("Failed to fetch IgnitionData", "error", err.Error())
 		return
+	}
+
+	var ignitionJSONData []byte
+	switch strings.TrimSpace(ignitionFormat) {
+	case bootv1alpha1.FCOSFormat:
+		ignitionJSONData, err = renderIgnition(ignitionData)
+		if err != nil {
+			log.Info("Failed to render the ignition data to json", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+	default:
+		ignitionJSONData = ignitionData
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -222,28 +228,32 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		return
 	}
 
-	// TODO: Assuming UUID is unique.
-	HTTPBootConfig := HTTPBootConfigList.Items[0]
+	httpBootConfig := HTTPBootConfigList.Items[0]
 
-	ignitionSecret := &corev1.Secret{}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: HTTPBootConfig.Spec.IgnitionSecretRef.Name, Namespace: HTTPBootConfig.Spec.IgnitionSecretRef.Namespace}, ignitionSecret); err != nil {
-		http.Error(w, "Resource Not Found", http.StatusNotFound)
-		log.Info("Error: Failed to get Ignition secret", "error", err.Error())
-		return
+	ignitionSecret := corev1.Secret{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      httpBootConfig.Spec.IgnitionSecretRef.Name,
+			Namespace: httpBootConfig.Spec.IgnitionSecretRef.Namespace,
+		},
 	}
-
-	ignitionData, ok := ignitionSecret.Data[bootv1alpha1.DefaultIgnitionKey]
-	if !ok {
-		http.Error(w, "Resource Not Found", http.StatusNotFound)
-		log.Info("Error: Ignition data not found in secret")
-		return
-	}
-
-	ignitionJSONData, err := renderIgnition(ignitionData)
+	ignitionData, ignitionFormat, err := fetchIgnitionData(ctx, k8sClient, ignitionSecret)
 	if err != nil {
-		log.Info("Failed to render the ignition data to json", "error", err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		http.Error(w, "Resource Not Found", http.StatusNotFound)
+		log.Info("Failed to fetch IgnitionData", "error", err.Error())
 		return
+	}
+
+	var ignitionJSONData []byte
+	switch strings.TrimSpace(ignitionFormat) {
+	case bootv1alpha1.FCOSFormat:
+		ignitionJSONData, err = renderIgnition(ignitionData)
+		if err != nil {
+			log.Info("Failed to render the ignition data to json", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+	default:
+		ignitionJSONData = ignitionData
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -253,6 +263,18 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+}
+
+func fetchIgnitionData(ctx context.Context, k8sClient client.Client, ignitionSecret corev1.Secret) ([]byte, string, error) {
+	secretObj := &corev1.Secret{}
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: ignitionSecret.Name, Namespace: ignitionSecret.Namespace}, secretObj); err != nil {
+		return nil, "", fmt.Errorf("failed to get the Ignition Secret %w", err)
+	}
+	ignitionData, ok := secretObj.Data[bootv1alpha1.DefaultIgnitionKey]
+	if !ok {
+		return nil, "", fmt.Errorf("secret data-key:ignition not found")
+	}
+	return ignitionData, string(secretObj.Data[bootv1alpha1.DefaultFormatKey]), nil
 }
 
 func renderIgnition(yamlData []byte) ([]byte, error) {

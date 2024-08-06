@@ -65,13 +65,6 @@ type IPXEBootConfigList struct {
 	Items           []IPXEBootConfig `json:"items"`
 }
 
-const (
-	DefaultIgnitionKey   = "ignition"
-	DefaultIPXEScriptKey = "ipxe-script"
-	SystemUUIDIndexKey   = "spec.systemUUID"
-	SystemIPIndexKey     = "spec.systemIPs"
-)
-
 func init() {
 	SchemeBuilder.Register(&IPXEBootConfig{}, &IPXEBootConfigList{})
 }
