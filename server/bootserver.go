@@ -154,6 +154,15 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 	}
 
 	if len(ipxeBootConfigList.Items) == 0 {
+		//Some OSes standardizes SystemUUIDs to lowercase, which may cause mismatches.
+		if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToLower(uuid)}); err != nil {
+			http.Error(w, "Resource Not Found", http.StatusNotFound)
+			log.Info("Failed to find IPXEBootConfig", "error", err.Error())
+			return
+		}
+	}
+
+	if len(ipxeBootConfigList.Items) == 0 {
 		http.Error(w, "Resource Not Found", http.StatusNotFound)
 		log.Info("No IPXEBootConfig found with given UUID")
 		return
@@ -220,6 +229,15 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		http.Error(w, "Resource Not Found", http.StatusNotFound)
 		log.Info("Failed to find HTTPBootConfigList", "error", err.Error())
 		return
+	}
+
+	if len(HTTPBootConfigList.Items) == 0 {
+		//Some OSes standardizes SystemUUIDs to lowercase, which may cause mismatches.
+		if err := k8sClient.List(ctx, HTTPBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToLower(uuid)}); err != nil {
+			http.Error(w, "Resource Not Found", http.StatusNotFound)
+			log.Info("Failed to find HTTPBootConfigList", "error", err.Error())
+			return
+		}
 	}
 
 	if len(HTTPBootConfigList.Items) == 0 {
