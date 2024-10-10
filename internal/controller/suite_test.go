@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/config"
+
 	"github.com/ironcore-dev/controller-utils/modutils"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -39,12 +42,11 @@ const (
 	consistentlyDuration = 1 * time.Second
 )
 
-// These tests use Ginkgo (BDD-style Go testing framework). Refer to
-// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
-
-var cfg *rest.Config
-var k8sClient client.Client
-var testEnv *envtest.Environment
+var (
+	cfg       *rest.Config
+	k8sClient client.Client
+	testEnv   *envtest.Environment
+)
 
 func TestControllers(t *testing.T) {
 	SetDefaultConsistentlyPollingInterval(pollingInterval)
@@ -73,7 +75,7 @@ var _ = BeforeSuite(func() {
 		// Note that you must have the required binaries setup under the bin directory to perform
 		// the tests directly. When we run make test it will be setup and used automatically.
 		BinaryAssetsDirectory: filepath.Join("..", "..", "bin", "k8s",
-			fmt.Sprintf("1.29.0-%s-%s", runtime.GOOS, runtime.GOARCH)),
+			fmt.Sprintf("1.31.0-%s-%s", runtime.GOOS, runtime.GOARCH)),
 	}
 
 	var err error
@@ -118,6 +120,11 @@ func SetupTest() *corev1.Namespace {
 
 		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme: scheme.Scheme,
+			Controller: config.Controller{
+				// need to skip unique controller name validation
+				// since all tests need a dedicated controller
+				SkipNameValidation: ptr.To(true),
+			},
 		})
 		Expect(err).ToNot(HaveOccurred())
 
