@@ -16,48 +16,6 @@ rules:
   - boot.ironcore.dev
   resources:
   - httpbootconfig
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - watch
-- apiGroups:
-  - boot.ironcore.dev
-  resources:
-  - httpbootconfig/status
-  verbs:
-  - get
-- apiGroups:
-  - boot.ironcore.dev
-  resources:
-  - httpbootconfigs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - boot.ironcore.dev
-  resources:
-  - httpbootconfigs/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - boot.ironcore.dev
-  resources:
-  - httpbootconfigs/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - boot.ironcore.dev
-  resources:
   - ipxebootconfig
   verbs:
   - create
@@ -69,12 +27,14 @@ rules:
 - apiGroups:
   - boot.ironcore.dev
   resources:
+  - httpbootconfig/status
   - ipxebootconfig/status
   verbs:
   - get
 - apiGroups:
   - boot.ironcore.dev
   resources:
+  - httpbootconfigs
   - ipxebootconfigs
   verbs:
   - create
@@ -87,12 +47,14 @@ rules:
 - apiGroups:
   - boot.ironcore.dev
   resources:
+  - httpbootconfigs/finalizers
   - ipxebootconfigs/finalizers
   verbs:
   - update
 - apiGroups:
   - boot.ironcore.dev
   resources:
+  - httpbootconfigs/status
   - ipxebootconfigs/status
   verbs:
   - get
@@ -102,6 +64,9 @@ rules:
   - metal.ironcore.dev
   resources:
   - bootconfigurations
+  - machines
+  - serverbootconfigurations
+  - servers
   verbs:
   - get
   - list
@@ -110,51 +75,15 @@ rules:
   - metal.ironcore.dev
   resources:
   - bootconfigurations/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - metal.ironcore.dev
-  resources:
-  - bootconfigurations/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - metal.ironcore.dev
-  resources:
-  - machines
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - metal.ironcore.dev
-  resources:
-  - serverbootconfigurations
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - metal.ironcore.dev
-  resources:
   - serverbootconfigurations/finalizers
   verbs:
   - update
 - apiGroups:
   - metal.ironcore.dev
   resources:
+  - bootconfigurations/status
   - serverbootconfigurations/status
   verbs:
   - get
   - patch
   - update
-- apiGroups:
-  - metal.ironcore.dev
-  resources:
-  - servers
-  verbs:
-  - get
-  - list
-  - watch

@@ -176,7 +176,7 @@ func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx con
 	return systemIPs, nil
 }
 
-func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
+func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(_ context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
 	imageDetails := strings.Split(config.Spec.Image, ":")
 	if len(imageDetails) != 2 {
 		return "", "", "", fmt.Errorf("invalid image format")

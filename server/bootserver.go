@@ -107,7 +107,7 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 
 	if len(ipxeConfigs.Items) == 0 {
 		log.Info("No IPXEBootConfig found for client IP, delivering default script", "clientIP", clientIP)
-		serveDefaultIPXETemplate(w, log, ipxeServiceURL, defaultIpxeTemplateData)
+		serveDefaultIPXETemplate(w, log, defaultIpxeTemplateData)
 	} else {
 		config := ipxeConfigs.Items[0]
 		if config.Spec.IPXEScriptSecretRef != nil {
@@ -133,7 +133,7 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 			return
 		}
 
-		serveDefaultIPXETemplate(w, log, ipxeServiceURL, IPXETemplateData{
+		serveDefaultIPXETemplate(w, log, IPXETemplateData{
 			KernelURL:     config.Spec.KernelURL,
 			InitrdURL:     config.Spec.InitrdURL,
 			SquashfsURL:   config.Spec.SquashfsURL,
@@ -205,7 +205,7 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 	}
 }
 
-func serveDefaultIPXETemplate(w http.ResponseWriter, log logr.Logger, ipxeServiceURL string, data IPXETemplateData) {
+func serveDefaultIPXETemplate(w http.ResponseWriter, log logr.Logger, data IPXETemplateData) {
 	tmplPath := filepath.Join("templates", "ipxe-script.tpl")
 	tmpl, err := template.ParseFiles(tmplPath)
 	if err != nil {
