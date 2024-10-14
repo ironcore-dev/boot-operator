@@ -97,7 +97,9 @@ func (imageDetails ImageDetails) getBearerToken() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -199,7 +201,9 @@ func (imageDetails ImageDetails) getLayerDigest(token string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("http client connection failed %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	var manifest ociimage.Manifest
 	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {

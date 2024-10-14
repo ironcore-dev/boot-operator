@@ -70,10 +70,7 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 	}
 	log.V(1).Info("Got system IPs from Server", "systemIPs", systemIPs)
 
-	ukiURL, err := r.constructUKIURL(config.Spec.Image)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get UKI URL from Config: %w", err)
-	}
+	ukiURL := r.constructUKIURL(config.Spec.Image)
 	log.V(1).Info("Extracted UKI URL for boot")
 
 	httpBootConfig := &bootv1alpha1.HTTPBootConfig{
@@ -153,7 +150,8 @@ func (r *ServerBootConfigurationHTTPReconciler) getSystemIPFromServer(ctx contex
 		return nil, fmt.Errorf("failed to get Server: %w", err)
 	}
 
-	var systemIPs []string
+	systemIPs := make([]string, 0, 2*len(server.Status.NetworkInterfaces))
+
 	for _, nic := range server.Status.NetworkInterfaces {
 		systemIPs = append(systemIPs, nic.IP.String())
 		systemIPs = append(systemIPs, nic.MACAddress)
@@ -161,7 +159,7 @@ func (r *ServerBootConfigurationHTTPReconciler) getSystemIPFromServer(ctx contex
 	return systemIPs, nil
 }
 
-func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(image string) (string, error) {
+func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(image string) string {
 	sanitizedImage := strings.Replace(image, "/", "-", -1)
 	sanitizedImage = strings.Replace(sanitizedImage, ":", "-", -1)
 	sanitizedImage = strings.Replace(sanitizedImage, "https://", "", -1)
@@ -170,7 +168,7 @@ func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(image string) (s
 	filename := fmt.Sprintf("%s-uki.efi", sanitizedImage)
 
 	ukiURL := fmt.Sprintf("%s/%s", r.ImageServerURL, filename)
-	return ukiURL, nil
+	return ukiURL
 }
 
 // SetupWithManager sets up the controller with the Manager.

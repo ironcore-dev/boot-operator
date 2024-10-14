@@ -1,5 +1,5 @@
 run:
-  deadline: 5m
+  timeout: 5m
   allow-parallel-runners: true
 
 issues:
@@ -18,14 +18,30 @@ issues:
         - lll
     - path: "server/*"
       linters:
-        - dupl
+        - lll
+    - path: "cmd/*"
+      linters:
         - lll
 linters:
   disable-all: true
   enable:
-    - ginkgolinter
-    - ineffassign
-    - misspell
+    - copyloopvar
+    - dupl
+    - errcheck
+    - goconst
+    - gocyclo
+    - gofmt
     - goimports
-    - importas
+    - gosimple
+    - govet
+    - ineffassign
+    - ginkgolinter
+    - lll
+    - misspell
+    - nakedret
+    - prealloc
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unparam
     - unused
