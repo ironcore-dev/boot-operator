@@ -61,10 +61,10 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     - name: Build and push Docker image
       uses: docker/build-push-action@v6
-      timeout-minutes: 60
+      timeout-minutes: 10
       with:
         context: .
         platforms: ${{ env.platforms }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        push: true
+        push: ${{ github.event_name != 'pull_request' }}
