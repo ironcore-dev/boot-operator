@@ -57,6 +57,14 @@ func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient clien
 		}
 
 		if len(ipxeBootConfigList.Items) == 0 {
+			err := k8sClient.List(r.Context(), ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToUpper(uuid)})
+			if client.IgnoreNotFound(err) != nil {
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		if len(ipxeBootConfigList.Items) == 0 {
 			log.Info("No IPXEBootConfig found with given UUID. Trying HTTPBootConfig")
 			handleIgnitionHTTPBoot(w, r, k8sClient, log, uuid)
 		} else {
@@ -156,7 +164,16 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 	if len(ipxeBootConfigList.Items) == 0 {
 		//Some OSes standardizes SystemUUIDs to uppercase, which may cause mismatches.
 		if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToUpper(uuid)}); err != nil {
-			http.Error(w, "Resource Not Found", http.StatusNotFound)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Info("Failed to find IPXEBootConfig", "error", err.Error())
+			return
+		}
+	}
+
+	if len(ipxeBootConfigList.Items) == 0 {
+		//Some OSes standardizes SystemUUIDs to lowercase, which may cause mismatches.
+		if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToLower(uuid)}); err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			log.Info("Failed to find IPXEBootConfig", "error", err.Error())
 			return
 		}
@@ -234,7 +251,16 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 	if len(HTTPBootConfigList.Items) == 0 {
 		//Some OSes standardizes SystemUUIDs to uppercase, which may cause mismatches.
 		if err := k8sClient.List(ctx, HTTPBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToUpper(uuid)}); err != nil {
-			http.Error(w, "Resource Not Found", http.StatusNotFound)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Info("Failed to find HTTPBootConfigList", "error", err.Error())
+			return
+		}
+	}
+
+	if len(HTTPBootConfigList.Items) == 0 {
+		//Some OSes standardizes SystemUUIDs to lowecase, which may cause mismatches.
+		if err := k8sClient.List(ctx, HTTPBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToLower(uuid)}); err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			log.Info("Failed to find HTTPBootConfigList", "error", err.Error())
 			return
 		}
