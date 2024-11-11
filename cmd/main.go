@@ -43,11 +43,10 @@ var (
 
 const (
 	// core controllers
-	machineBootConfigControllerHttp = "machinebootconfighttp"
-	ipxeBootConfigController        = "ipxebootconfig"
-	serverBootConfigControllerPxe   = "serverbootconfigpxe"
-	httpBootConfigController        = "httpbootconfig"
-	serverBootConfigControllerHttp  = "serverbootconfighttp"
+	ipxeBootConfigController       = "ipxebootconfig"
+	serverBootConfigControllerPxe  = "serverbootconfigpxe"
+	httpBootConfigController       = "httpbootconfig"
+	serverBootConfigControllerHttp = "serverbootconfighttp"
 )
 
 func init() {
@@ -76,7 +75,6 @@ func main() {
 	var ipxeServiceProtocol string
 	var ipxeServicePort int
 	var imageServerURL string
-	var bootconfigNamespace string
 
 	flag.IntVar(&ipxeServicePort, "ipxe-service-port", 5000, "IPXE Service port to listen on.")
 	flag.StringVar(&ipxeServiceProtocol, "ipxe-service-protocol", "http", "IPXE Service Protocol.")
@@ -85,7 +83,6 @@ func main() {
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&bootserverAddr, "boot-server-address", ":8082", "The address the boot-server binds to.")
-	flag.StringVar(&bootconfigNamespace, "machinebootconfig-namespace", "default", "The namespace in which HTTPBootConfigs should be created for MachineBootConfiguration Controller.")
 	flag.StringVar(&imageProxyServerAddr, "image-proxy-server-address", ":8083", "The address the image-proxy-server binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
@@ -100,7 +97,6 @@ func main() {
 		ipxeBootConfigController,
 		serverBootConfigControllerPxe,
 		serverBootConfigControllerHttp,
-		machineBootConfigControllerHttp,
 		httpBootConfigController,
 	)
 
@@ -209,18 +205,6 @@ func main() {
 			ImageServerURL: imageServerURL,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigHttp")
-			os.Exit(1)
-		}
-	}
-
-	if controllers.Enabled(machineBootConfigControllerHttp) {
-		if err = (&controller.MachineBootConfigurationHTTPReconciler{
-			Client:              mgr.GetClient(),
-			Scheme:              mgr.GetScheme(),
-			ImageServerURL:      imageServerURL,
-			BootConfigNamespace: bootconfigNamespace,
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "MachineBootConfigHttp")
 			os.Exit(1)
 		}
 	}

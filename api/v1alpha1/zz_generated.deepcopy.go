@@ -8,7 +8,7 @@
 package v1alpha1
 
 import (
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -76,7 +76,7 @@ func (in *HTTPBootConfigSpec) DeepCopyInto(out *HTTPBootConfigSpec) {
 	*out = *in
 	if in.IgnitionSecretRef != nil {
 		in, out := &in.IgnitionSecretRef, &out.IgnitionSecretRef
-		*out = new(v1.ObjectReference)
+		*out = new(v1.LocalObjectReference)
 		**out = **in
 	}
 	if in.SystemIPs != nil {
