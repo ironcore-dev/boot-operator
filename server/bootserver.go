@@ -277,7 +277,7 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 	ignitionSecret := corev1.Secret{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      httpBootConfig.Spec.IgnitionSecretRef.Name,
-			Namespace: httpBootConfig.Spec.IgnitionSecretRef.Namespace,
+			Namespace: httpBootConfig.Namespace,
 		},
 	}
 	ignitionData, ignitionFormat, err := fetchIgnitionData(ctx, k8sClient, ignitionSecret)

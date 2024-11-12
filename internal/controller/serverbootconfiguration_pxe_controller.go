@@ -23,7 +23,6 @@ import (
 
 	"github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	ironcoreimage "github.com/ironcore-dev/ironcore-image"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -101,13 +100,15 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 			Name:      config.Name,
 		},
 		Spec: v1alpha1.IPXEBootConfigSpec{
-			SystemUUID:        systemUUID,
-			SystemIPs:         systemIPs,
-			KernelURL:         kernelURL,
-			InitrdURL:         initrdURL,
-			SquashfsURL:       squashFSURL,
-			IgnitionSecretRef: &v1.LocalObjectReference{Name: config.Spec.IgnitionSecretRef.Name},
+			SystemUUID:  systemUUID,
+			SystemIPs:   systemIPs,
+			KernelURL:   kernelURL,
+			InitrdURL:   initrdURL,
+			SquashfsURL: squashFSURL,
 		},
+	}
+	if config.Spec.IgnitionSecretRef != nil {
+		ipxeConfig.Spec.IgnitionSecretRef = config.Spec.IgnitionSecretRef
 	}
 
 	if err := controllerutil.SetControllerReference(config, ipxeConfig, r.Scheme); err != nil {

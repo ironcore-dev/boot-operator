@@ -10,7 +10,6 @@ import (
 
 	"github.com/go-logr/logr"
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -83,11 +82,13 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 			Name:      config.Name,
 		},
 		Spec: bootv1alpha1.HTTPBootConfigSpec{
-			SystemUUID:        systemUUID,
-			SystemIPs:         systemIPs,
-			UKIURL:            ukiURL,
-			IgnitionSecretRef: &corev1.ObjectReference{Name: config.Spec.IgnitionSecretRef.Name, Namespace: config.Namespace},
+			SystemUUID: systemUUID,
+			SystemIPs:  systemIPs,
+			UKIURL:     ukiURL,
 		},
+	}
+	if config.Spec.IgnitionSecretRef != nil {
+		httpBootConfig.Spec.IgnitionSecretRef = config.Spec.IgnitionSecretRef
 	}
 
 	if err := controllerutil.SetControllerReference(config, httpBootConfig, r.Scheme); err != nil {
