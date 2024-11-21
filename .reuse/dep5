@@ -27,6 +27,7 @@ Files:
   test/*
   CONTRIBUTING.md
   PROJECT
+  mkdocs.yml
   .dockerignore
   .golangci.yml
 Copyright: 2024 SAP SE or an SAP affiliate company and IronCore contributors
