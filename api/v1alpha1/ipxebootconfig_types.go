@@ -13,26 +13,45 @@ import (
 
 // IPXEBootConfigSpec defines the desired state of IPXEBootConfig
 type IPXEBootConfigSpec struct {
-	// Important: Run "make" to regenerate code after modifying this file
-	SystemUUID string   `json:"systemUUID,omitempty"`
-	SystemIPs  []string `json:"systemIPs,omitempty"` // TODO: Add the custom serialization. For now validate at the controller.
-	// TODO: remove image as this is not needed
-	Image       string `json:"image,omitempty"`
-	KernelURL   string `json:"kernelURL,omitempty"`
-	InitrdURL   string `json:"initrdURL,omitempty"`
+	// SystemUUID is the unique identifier (UUID) of the server.
+	SystemUUID string `json:"systemUUID,omitempty"`
+
+	// SystemIPs is a list of IP addresses assigned to the server.
+	SystemIPs []string `json:"systemIPs,omitempty"` // TODO: Implement custom serialization. Currently, validation should occur at the controller.
+
+	// Image is deprecated and will be removed.
+	Image string `json:"image,omitempty"`
+
+	// KernelURL is the URL where the kernel of the OS is hosted, eg. the URL to the Kernel layer of the OS OCI image.
+	KernelURL string `json:"kernelURL,omitempty"`
+
+	// InitrdURL is the URL where the Initrd (initial RAM disk) of the OS is hosted, eg. the URL to the Initrd layer of the OS OCI image.
+	InitrdURL string `json:"initrdURL,omitempty"`
+
+	// SquashfsURL is the URL where the Squashfs of the OS is hosted, eg.  the URL to the Squashfs layer of the OS OCI image.
 	SquashfsURL string `json:"squashfsURL,omitempty"`
-	// TODO: remove later
-	IPXEServerURL       string                       `json:"ipxeServerURL,omitempty"`
-	IgnitionSecretRef   *corev1.LocalObjectReference `json:"ignitionSecretRef,omitempty"`
+
+	// IPXEServerURL is deprecated and will be removed.
+	IPXEServerURL string `json:"ipxeServerURL,omitempty"`
+
+	// IgnitionSecretRef is a reference to the secret containing the Ignition configuration.
+	IgnitionSecretRef *corev1.LocalObjectReference `json:"ignitionSecretRef,omitempty"`
+
+	// IPXEScriptSecretRef is a reference to the secret containing the custom IPXE script.
 	IPXEScriptSecretRef *corev1.LocalObjectReference `json:"ipxeScriptSecretRef,omitempty"`
 }
 
 type IPXEBootConfigState string
 
 const (
-	IPXEBootConfigStateReady   IPXEBootConfigState = "Ready"
+	// IPXEBootConfigStateReady indicates that the IPXEBootConfig has been successfully processed, and the next step (e.g., booting the server) can proceed.
+	IPXEBootConfigStateReady IPXEBootConfigState = "Ready"
+
+	// IPXEBootConfigStatePending indicates that the IPXEBootConfig has not been processed yet.
 	IPXEBootConfigStatePending IPXEBootConfigState = "Pending"
-	IPXEBootConfigStateError   IPXEBootConfigState = "Error"
+
+	// IPXEBootConfigStateError indicates that an error occurred while processing the IPXEBootConfig.
+	IPXEBootConfigStateError IPXEBootConfigState = "Error"
 )
 
 // IPXEBootConfigStatus defines the observed state of IPXEBootConfig

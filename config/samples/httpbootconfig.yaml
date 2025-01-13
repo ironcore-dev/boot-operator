@@ -9,12 +9,11 @@ metadata:
     app.kubernetes.io/created-by: boot-operator
   name: httpbootconfig-sample
 spec:
-  systemUUID: 1234
-  systemIPs:
-    - 1.2.3.4
   ignitionSecretRef:
-    name: ignition-sample
-  kernelURL: "10.0.0.1/ipxe/rootfs.vmlinuz"
-  initrdURL: "10.0.0.1/ipxe/rootfs.initrd"
-  squashfsURL: "10.0.0.1/ipxe/root.squashfs"
-  
+    name: ignition-foo
+    namespace: default
+  systemIPs:
+  - f55b:9d4e:e9c9:5183:f7e8:3012:60ce:497b
+  - 1001:194a:21fb:53d3:9de1:28f3:97ce:d31d
+  systemUUID: abcd648-490f-11ea-a6c2-0a94efaabcdrd
+  ukiURL: http://[feed:c0de::]/httpboot/foo-os-uki.efi
