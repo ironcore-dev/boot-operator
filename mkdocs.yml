@@ -49,12 +49,9 @@ markdown_extensions:
 nav:
 - Home: README.md
 - Architecture: architecture.md
-- Concepts:
-    - IPXEBootConfiguration: concepts/ipxebootconfig.yaml
-    - HTTPBootConfiguration: concepts/httpbootconfig.yaml
 - Development Guide:
-  - Local Setup: development/dev_setup.md
   - Documentation: development/dev_docs.md
+  - Create Sample UKI Image: development/create_uki.md
 - API Reference: api-reference/api.md
 
 extra:

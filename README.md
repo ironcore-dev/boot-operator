@@ -113,8 +113,6 @@ More information can be found via the [Kubebuilder Documentation](https://book.k
 ## Roadmap
 Looking ahead, the boot-Operator aims to introduce a range of enhancements to further empower Kubernetes-driven infrastructure provisioning:
 
-- Configurable iPXE Scripts: Enable customization of iPXE script templates to accommodate diverse booting requirements.
-
 - Custom Image Registry Support: Dynamically generate URLs for the kernel, initrd, and squashfs images from a specified image registry, facilitating streamlined updates and deployments.
 
 - Expanded Endpoints: Introduce additional endpoints, such as `/ztp` for Zero Touch Provisioning of switches and `/certs` for certificate management, broadening the operator's utility.

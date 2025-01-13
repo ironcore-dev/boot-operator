@@ -79,6 +79,7 @@ string
 </em>
 </td>
 <td>
+<p>SystemUUID is the unique identifier (UUID) of the server.</p>
 </td>
 </tr>
 <tr>
@@ -91,6 +92,7 @@ Kubernetes core/v1.LocalObjectReference
 </em>
 </td>
 <td>
+<p>IgnitionSecretRef is a reference to the secret containing Ignition configuration.</p>
 </td>
 </tr>
 <tr>
@@ -101,6 +103,7 @@ Kubernetes core/v1.LocalObjectReference
 </em>
 </td>
 <td>
+<p>SystemIPs is a list of IP addresses assigned to the server.</p>
 </td>
 </tr>
 <tr>
@@ -111,6 +114,7 @@ string
 </em>
 </td>
 <td>
+<p>UKIURL is the URL where the UKI (Unified Kernel Image) is hosted.</p>
 </td>
 </tr>
 </table>
@@ -195,7 +199,7 @@ string
 </em>
 </td>
 <td>
-<p>Important: Run &ldquo;make&rdquo; to regenerate code after modifying this file</p>
+<p>SystemUUID is the unique identifier (UUID) of the server.</p>
 </td>
 </tr>
 <tr>
@@ -206,6 +210,7 @@ string
 </em>
 </td>
 <td>
+<p>SystemIPs is a list of IP addresses assigned to the server.</p>
 </td>
 </tr>
 <tr>
@@ -216,7 +221,7 @@ string
 </em>
 </td>
 <td>
-<p>TODO: remove image as this is not needed</p>
+<p>Image is deprecated and will be removed.</p>
 </td>
 </tr>
 <tr>
@@ -227,6 +232,7 @@ string
 </em>
 </td>
 <td>
+<p>KernelURL is the URL where the kernel of the OS is hosted, eg. the URL to the Kernel layer of the OS OCI image.</p>
 </td>
 </tr>
 <tr>
@@ -237,6 +243,7 @@ string
 </em>
 </td>
 <td>
+<p>InitrdURL is the URL where the Initrd (initial RAM disk) of the OS is hosted, eg. the URL to the Initrd layer of the OS OCI image.</p>
 </td>
 </tr>
 <tr>
@@ -247,6 +254,7 @@ string
 </em>
 </td>
 <td>
+<p>SquashfsURL is the URL where the Squashfs of the OS is hosted, eg.  the URL to the Squashfs layer of the OS OCI image.</p>
 </td>
 </tr>
 <tr>
@@ -257,7 +265,7 @@ string
 </em>
 </td>
 <td>
-<p>TODO: remove later</p>
+<p>IPXEServerURL is deprecated and will be removed.</p>
 </td>
 </tr>
 <tr>
@@ -270,6 +278,7 @@ Kubernetes core/v1.LocalObjectReference
 </em>
 </td>
 <td>
+<p>IgnitionSecretRef is a reference to the secret containing the Ignition configuration.</p>
 </td>
 </tr>
 <tr>
@@ -282,6 +291,7 @@ Kubernetes core/v1.LocalObjectReference
 </em>
 </td>
 <td>
+<p>IPXEScriptSecretRef is a reference to the secret containing the custom IPXE script.</p>
 </td>
 </tr>
 </table>
@@ -325,6 +335,7 @@ string
 </em>
 </td>
 <td>
+<p>SystemUUID is the unique identifier (UUID) of the server.</p>
 </td>
 </tr>
 <tr>
@@ -337,6 +348,7 @@ Kubernetes core/v1.LocalObjectReference
 </em>
 </td>
 <td>
+<p>IgnitionSecretRef is a reference to the secret containing Ignition configuration.</p>
 </td>
 </tr>
 <tr>
@@ -347,6 +359,7 @@ Kubernetes core/v1.LocalObjectReference
 </em>
 </td>
 <td>
+<p>SystemIPs is a list of IP addresses assigned to the server.</p>
 </td>
 </tr>
 <tr>
@@ -357,6 +370,7 @@ string
 </em>
 </td>
 <td>
+<p>UKIURL is the URL where the UKI (Unified Kernel Image) is hosted.</p>
 </td>
 </tr>
 </tbody>
@@ -376,11 +390,14 @@ string
 </tr>
 </thead>
 <tbody><tr><td><p>&#34;Error&#34;</p></td>
-<td></td>
+<td><p>HTTPBootConfigStateError indicates that an error occurred while processing the HTTPBootConfig.</p>
+</td>
 </tr><tr><td><p>&#34;Pending&#34;</p></td>
-<td></td>
+<td><p>HTTPBootConfigStatePending indicates that the HTTPBootConfig has not been processed yet.</p>
+</td>
 </tr><tr><td><p>&#34;Ready&#34;</p></td>
-<td></td>
+<td><p>HTTPBootConfigStateReady indicates that the HTTPBootConfig has been successfully processed, and the next step (e.g., booting the server) can proceed.</p>
+</td>
 </tr></tbody>
 </table>
 <h3 id="metal.ironcore.dev/v1alpha1.HTTPBootConfigStatus">HTTPBootConfigStatus
@@ -437,7 +454,7 @@ string
 </em>
 </td>
 <td>
-<p>Important: Run &ldquo;make&rdquo; to regenerate code after modifying this file</p>
+<p>SystemUUID is the unique identifier (UUID) of the server.</p>
 </td>
 </tr>
 <tr>
@@ -448,6 +465,7 @@ string
 </em>
 </td>
 <td>
+<p>SystemIPs is a list of IP addresses assigned to the server.</p>
 </td>
 </tr>
 <tr>
@@ -458,7 +476,7 @@ string
 </em>
 </td>
 <td>
-<p>TODO: remove image as this is not needed</p>
+<p>Image is deprecated and will be removed.</p>
 </td>
 </tr>
 <tr>
@@ -469,6 +487,7 @@ string
 </em>
 </td>
 <td>
+<p>KernelURL is the URL where the kernel of the OS is hosted, eg. the URL to the Kernel layer of the OS OCI image.</p>
 </td>
 </tr>
 <tr>
@@ -479,6 +498,7 @@ string
 </em>
 </td>
 <td>
+<p>InitrdURL is the URL where the Initrd (initial RAM disk) of the OS is hosted, eg. the URL to the Initrd layer of the OS OCI image.</p>
 </td>
 </tr>
 <tr>
@@ -489,6 +509,7 @@ string
 </em>
 </td>
 <td>
+<p>SquashfsURL is the URL where the Squashfs of the OS is hosted, eg.  the URL to the Squashfs layer of the OS OCI image.</p>
 </td>
 </tr>
 <tr>
@@ -499,7 +520,7 @@ string
 </em>
 </td>
 <td>
-<p>TODO: remove later</p>
+<p>IPXEServerURL is deprecated and will be removed.</p>
 </td>
 </tr>
 <tr>
@@ -512,6 +533,7 @@ Kubernetes core/v1.LocalObjectReference
 </em>
 </td>
 <td>
+<p>IgnitionSecretRef is a reference to the secret containing the Ignition configuration.</p>
 </td>
 </tr>
 <tr>
@@ -524,6 +546,7 @@ Kubernetes core/v1.LocalObjectReference
 </em>
 </td>
 <td>
+<p>IPXEScriptSecretRef is a reference to the secret containing the custom IPXE script.</p>
 </td>
 </tr>
 </tbody>
@@ -543,11 +566,14 @@ Kubernetes core/v1.LocalObjectReference
 </tr>
 </thead>
 <tbody><tr><td><p>&#34;Error&#34;</p></td>
-<td></td>
+<td><p>IPXEBootConfigStateError indicates that an error occurred while processing the IPXEBootConfig.</p>
+</td>
 </tr><tr><td><p>&#34;Pending&#34;</p></td>
-<td></td>
+<td><p>IPXEBootConfigStatePending indicates that the IPXEBootConfig has not been processed yet.</p>
+</td>
 </tr><tr><td><p>&#34;Ready&#34;</p></td>
-<td></td>
+<td><p>IPXEBootConfigStateReady indicates that the IPXEBootConfig has been successfully processed, and the next step (e.g., booting the server) can proceed.</p>
+</td>
 </tr></tbody>
 </table>
 <h3 id="metal.ironcore.dev/v1alpha1.IPXEBootConfigStatus">IPXEBootConfigStatus

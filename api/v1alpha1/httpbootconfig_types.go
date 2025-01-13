@@ -10,10 +10,17 @@ import (
 
 // HTTPBootConfigSpec defines the desired state of HTTPBootConfig
 type HTTPBootConfigSpec struct {
-	SystemUUID        string                       `json:"systemUUID,omitempty"`
+	// SystemUUID is the unique identifier (UUID) of the server.
+	SystemUUID string `json:"systemUUID,omitempty"`
+
+	// IgnitionSecretRef is a reference to the secret containing Ignition configuration.
 	IgnitionSecretRef *corev1.LocalObjectReference `json:"ignitionSecretRef,omitempty"`
-	SystemIPs         []string                     `json:"systemIPs,omitempty"`
-	UKIURL            string                       `json:"ukiURL,omitempty"`
+
+	// SystemIPs is a list of IP addresses assigned to the server.
+	SystemIPs []string `json:"systemIPs,omitempty"`
+
+	// UKIURL is the URL where the UKI (Unified Kernel Image) is hosted.
+	UKIURL string `json:"ukiURL,omitempty"`
 }
 
 // HTTPBootConfigStatus defines the observed state of HTTPBootConfig
@@ -24,9 +31,14 @@ type HTTPBootConfigStatus struct {
 type HTTPBootConfigState string
 
 const (
-	HTTPBootConfigStateReady   HTTPBootConfigState = "Ready"
+	// HTTPBootConfigStateReady indicates that the HTTPBootConfig has been successfully processed, and the next step (e.g., booting the server) can proceed.
+	HTTPBootConfigStateReady HTTPBootConfigState = "Ready"
+
+	// HTTPBootConfigStatePending indicates that the HTTPBootConfig has not been processed yet.
 	HTTPBootConfigStatePending HTTPBootConfigState = "Pending"
-	HTTPBootConfigStateError   HTTPBootConfigState = "Error"
+
+	// HTTPBootConfigStateError indicates that an error occurred while processing the HTTPBootConfig.
+	HTTPBootConfigStateError HTTPBootConfigState = "Error"
 )
 
 // +kubebuilder:object:root=true

@@ -1,51 +1,39 @@
-# Metal-Operator Documentation
+# Boot-Operator Documentation
 
-**Welcome to the Metal-Operator Documentation!**
+## Overview
 
-The `metal-operator` is a Kubernetes-native operator, part of the IronCore open-source project, designed for robust bare metal infrastructure management. By leveraging Baseboard Management Controllers (BMCs) and the Redfish API, `metal-operator` enables streamlined and automated server discovery, provisioning, and lifecycle management. Using the Kubernetes Controller pattern, `metal-operator` provides a CRD-based operational model that standardizes bare metal management across different hardware environments. Integration with vendor-specific tooling is also possible for enhanced functionality when needed.
+Boot Operator is a Kubernetes-based project designed to automate the deployment of tools required for booting bare metal servers. It integrates web servers and Kubernetes controllers to manage the entire process of provisioning, booting, and configuring the server.
 
----
+## Problem It Solves
 
-## Key Features
+When a bare metal server boots with a network boot method (e.g., PXE or HTTP boot), it typically contacts a DHCP or proxy DHCP server to obtain the necessary information for booting. The DHCP server then provides the IP address of a TFTP server (for PXE) or a web server (for HTTP boot), along with additional boot parameters.
 
-### 1. **Discover and Onboard Bare Metal Servers**
-- Automatically detect and register bare metal servers through BMCs and the Redfish API.
-- Efficiently gather hardware specs, network configurations, and initial health checks directly from BMC interfaces.
+Traditionally, managing these network boot servers requires manual configuration. Boot Operator automates this by incorporating the boot servers into Kubernetes deployments. By leveraging Kubernetes controllers, each machine's boot process is handled declaratively, making it simpler to manage and scale.
 
-### 2. **Provision Software on Bare Metal Servers**
-- Deploy and configure software on registered servers using BMC interactions and standardized provisioning workflows.
-- Support for dynamic software configuration and Redfish API-based management for consistent, vendor-neutral provisioning.
+## Key Components
 
-### 3. **Manage Server Reservations**
-- Reserve specific bare metal resources based on workload needs.
-- Prevent resource conflicts by managing reservations via Kubernetes-native CRDs, ensuring that workloads align with available hardware resources.
+Boot Operator includes the following key components:
 
-### 4. **Perform Day 2 Operations**
-- Utilize the Redfish API to manage BIOS, firmware, and driver updates.
-- Automate ongoing maintenance tasks and operational workflows to maintain infrastructure resilience and uptime.
+  - **IPXE Boot Server**  
+    - Handles `/ipxe` requests  
+    - Responds with an iPXE script, which the bare metal server uses to download the necessary OS components  
+    - This endpoint is typically called directly by the server during boot and is commonly used in PXE boot scenarios
 
-### 5. **Decommission and Maintain Faulty Servers**
-- Decommission servers via BMC controls for clean removal from active pools.
-- Schedule and perform maintenance tasks with BMC data to optimize uptime and maintain hardware reliability.
+  - **HTTP Boot Server**  
+    - Handles `/httpboot` requests  
+    - Returns a JSON response containing the location of the UKI (Unified Kernel Image) that the server should download  
+    - The DHCP server extension typically handles the response and sends the UKI image location to the server  
+    - Common in modern cloud-native bare metal setups, especially for containers and minimal OS images
 
----
+  - **Image Proxy Server**  
+    - Handles `/image` requests
+    - Extracts layers from public OCI (Open Container Initiative) images, with current support for GHCR (GitHub Container Registry) only 
+    - Downloads specific layers based on the requested URI and image specifications  
+    - Example:
+      - `wget http://SERVER_ADDRESS:30007/image?imageName=ghcr.io/ironcore-dev/os-images/gardenlinux&version=1443.10&layerName=application/vnd.ironcore.image.squashfs.v1alpha1.squashfs`
 
-## How It Works
+  - **Ignition Server**  
+    - Handles `/ignition` requests  
+    - Responds with Ignition configuration content tailored to the client machine, identified by its UUID in the request URL.
 
-The `metal-operator` relies on **BMCs and the Redfish API** to handle bare metal server management tasks. Through a CRD-based operational model, `metal-operator` provides Kubernetes-native management of bare metal infrastructure, enabling consistent, vendor-neutral interactions.
-
-### Core Components
-- **Custom Resources (CRs)**: Extend Kubernetes to manage server configurations, reservations, and operational workflows.
-- **Controllers**: Automate lifecycle management through Redfish-enabled interactions, from provisioning to decommissioning.
-- **Reconcilers**: Ensure the desired state matches the actual state by continuously monitoring hardware via BMC integrations.
-
-### Architecture Overview
-
-1. **Discovery**: Register new bare metal servers through BMCs and Redfish API, creating CRDs for streamlined management.
-2. **Provisioning**: Apply software images and configurations using Redfish API, based on templates or custom configurations.
-3. **Operations**: Execute BIOS, firmware updates, and other maintenance tasks through standardized workflows.
-4. **Decommissioning**: Safely remove or maintain servers using Redfish and BMC controls, marking them for reuse or retirement as needed.
-
----
-
-The `metal-operator` is a core component of the IronCore project, designed to simplify and automate bare metal management across various hardware environments using BMC and Redfish API integrations. Expect continuous updates to expand capabilities and enhance usability.
+These servers leverage Kubernetes controllers and API objects to manage the boot process and serve requests from bare metal machines. The architecture and specifics of the controllers and API objects are described in the architecture section of the documentation.
