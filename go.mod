@@ -9,7 +9,7 @@ require (
 	github.com/ironcore-dev/ironcore-image v0.2.3
 	github.com/ironcore-dev/metal v0.0.0-20240624131301-18385f342755
 	github.com/ironcore-dev/metal-operator v0.0.0-20241009145147-7ccca8caf3b1
-	github.com/onsi/ginkgo/v2 v2.22.1
+	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/onsi/gomega v1.36.2
 	github.com/opencontainers/image-spec v1.1.0
 	k8s.io/api v0.31.1
