@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	github.com/coreos/butane v0.23.0
 	github.com/go-logr/logr v1.4.2
-	github.com/ironcore-dev/controller-utils v0.9.4
+	github.com/ironcore-dev/controller-utils v0.9.7
 	github.com/ironcore-dev/ironcore-image v0.2.4
 	github.com/ironcore-dev/metal v0.0.0-20240624131301-18385f342755
 	github.com/ironcore-dev/metal-operator v0.0.0-20241009145147-7ccca8caf3b1
@@ -66,7 +66,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace // indirect
-	github.com/stretchr/testify v1.9.0 // indirect
+	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/vincent-petithory/dataurl v1.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -87,7 +87,7 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.31.0 // indirect
+	k8s.io/apiextensions-apiserver v0.31.4 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
