@@ -6,7 +6,6 @@ require (
 	github.com/coreos/butane v0.23.0
 	github.com/go-logr/logr v1.4.2
 	github.com/ironcore-dev/controller-utils v0.9.7
-	github.com/ironcore-dev/ironcore-image v0.2.4
 	github.com/ironcore-dev/metal v0.0.0-20240624131301-18385f342755
 	github.com/ironcore-dev/metal-operator v0.0.0-20241009145147-7ccca8caf3b1
 	github.com/onsi/ginkgo/v2 v2.22.2
@@ -16,6 +15,7 @@ require (
 	k8s.io/apimachinery v0.32.0
 	k8s.io/client-go v0.32.0
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
+	oras.land/oras-go/v2 v2.5.0
 	sigs.k8s.io/controller-runtime v0.19.4
 )
 
@@ -24,10 +24,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/clarketm/json v1.17.1 // indirect
-	github.com/containerd/containerd v1.7.23 // indirect
-	github.com/containerd/errdefs v1.0.0 // indirect
-	github.com/containerd/log v0.1.0 // indirect
-	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/coreos/go-json v0.0.0-20230131223807-18775e0fb4fb // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
@@ -52,7 +48,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -64,7 +59,6 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
-	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.6-0.20210604193023-d5e0c0615ace // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/vincent-petithory/dataurl v1.0.0 // indirect
@@ -81,8 +75,6 @@ require (
 	golang.org/x/time v0.7.0 // indirect
 	golang.org/x/tools v0.28.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240701130421-f6361c86f094 // indirect
-	google.golang.org/grpc v1.65.0 // indirect
 	google.golang.org/protobuf v1.36.1 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
