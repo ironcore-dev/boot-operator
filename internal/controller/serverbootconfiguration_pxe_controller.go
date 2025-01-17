@@ -18,11 +18,12 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/ironcore-dev/boot-operator/api/v1alpha1"
-	ironcoreimage "github.com/ironcore-dev/ironcore-image"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -31,13 +32,28 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/containerd/containerd/remotes"
+	"github.com/containerd/containerd/remotes/docker"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 type ServerBootConfigurationPXEReconciler struct {
 	client.Client
 	Scheme         *runtime.Scheme
 	IPXEServiceURL string
+	Architecture   string
 }
+
+const (
+	MediaTypeKernel        = "application/io.gardenlinux.kernel"
+	MediaTypeInitrd        = "application/io.gardenlinux.initrd"
+	MediaTypeSquashFS      = "application/io.gardenlinux.squashfs"
+	AnnotationArchitecture = "io.gardenlinux.image.layer.architecture"
+	CNAMEPrefixMetalPXE    = "metal_pxe"
+	ArchitectureAMD64      = "amd64"
+	ArchitectureARM64      = "arm64"
+)
 
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverbootconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverbootconfigurations/status,verbs=get;update;patch
@@ -65,7 +81,7 @@ func (r *ServerBootConfigurationPXEReconciler) reconcileExists(ctx context.Conte
 	return r.reconcile(ctx, log, config)
 }
 
-func (r *ServerBootConfigurationPXEReconciler) delete(ctx context.Context, log logr.Logger, config *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
+func (r *ServerBootConfigurationPXEReconciler) delete(_ context.Context, _ logr.Logger, _ *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
@@ -177,18 +193,114 @@ func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx con
 	return systemIPs, nil
 }
 
-func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(_ context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
+func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
 	imageDetails := strings.Split(config.Spec.Image, ":")
 	if len(imageDetails) != 2 {
 		return "", "", "", fmt.Errorf("invalid image format")
 	}
-	kernelURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerName=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], ironcoreimage.KernelLayerMediaType)
-	initrdURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerName=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], ironcoreimage.InitRAMFSLayerMediaType)
-	// TODO: move this const to ironcore-image
-	const squashFSMediaTypeLayer = "application/vnd.ironcore.image.squashfs.v1alpha1.squashfs"
-	squashFSURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerName=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], squashFSMediaTypeLayer)
+
+	kernelDigest, initrdDigest, squashFSDigest, err := r.getLayerDigestsFromNestedManifest(ctx, imageDetails[0], imageDetails[1])
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to fetch layer digests: %w", err)
+	}
+
+	kernelURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], kernelDigest)
+	initrdURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], initrdDigest)
+	squashFSURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], squashFSDigest)
 
 	return kernelURL, initrdURL, squashFSURL, nil
+}
+
+func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest(ctx context.Context, imageName, imageVersion string) (string, string, string, error) {
+	resolver := docker.NewResolver(docker.ResolverOptions{})
+	imageRef := fmt.Sprintf("%s:%s", imageName, imageVersion)
+	name, desc, err := resolver.Resolve(ctx, imageRef)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to resolve image reference: %w", err)
+	}
+
+	indexData, err := fetchContent(ctx, resolver, name, desc)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to fetch index manifest: %w", err)
+	}
+
+	var indexManifest ocispec.Index
+	if err := json.Unmarshal(indexData, &indexManifest); err != nil {
+		return "", "", "", fmt.Errorf("failed to unmarshal index manifest: %w", err)
+	}
+
+	var targetManifestDesc ocispec.Descriptor
+	for _, manifest := range indexManifest.Manifests {
+		if strings.HasPrefix(manifest.Annotations["cname"], CNAMEPrefixMetalPXE) {
+			if manifest.Annotations["architecture"] == r.Architecture {
+				targetManifestDesc = manifest
+				break
+			}
+		}
+	}
+
+	if targetManifestDesc.Digest == "" {
+		return "", "", "", fmt.Errorf("failed to find target manifest with cname annotation")
+	}
+
+	nestedData, err := fetchContent(ctx, resolver, name, targetManifestDesc)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to fetch nested manifest: %w", err)
+	}
+
+	var nestedManifest ocispec.Manifest
+	if err := json.Unmarshal(nestedData, &nestedManifest); err != nil {
+		return "", "", "", fmt.Errorf("failed to unmarshal nested manifest: %w", err)
+	}
+
+	var kernelDigest, initrdDigest, squashFSDigest string
+	for _, layer := range nestedManifest.Layers {
+		if layer.Annotations[AnnotationArchitecture] == r.Architecture {
+			switch layer.MediaType {
+			case MediaTypeKernel:
+				kernelDigest = layer.Digest.String()
+			case MediaTypeInitrd:
+				initrdDigest = layer.Digest.String()
+			case MediaTypeSquashFS:
+				squashFSDigest = layer.Digest.String()
+			}
+		}
+	}
+
+	if kernelDigest == "" || initrdDigest == "" || squashFSDigest == "" {
+		return "", "", "", fmt.Errorf("failed to find all required layer digests")
+	}
+
+	return kernelDigest, initrdDigest, squashFSDigest, nil
+}
+
+func fetchContent(ctx context.Context, resolver remotes.Resolver, ref string, desc ocispec.Descriptor) ([]byte, error) {
+	fetcher, err := resolver.Fetcher(ctx, ref)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get fetcher: %w", err)
+	}
+
+	reader, err := fetcher.Fetch(ctx, desc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch content: %w", err)
+	}
+
+	defer func() {
+		if cerr := reader.Close(); cerr != nil {
+			fmt.Printf("failed to close reader: %v\n", cerr)
+		}
+	}()
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read content: %w", err)
+	}
+
+	if int64(len(data)) != desc.Size {
+		return nil, fmt.Errorf("size mismatch: expected %d, got %d", desc.Size, len(data))
+	}
+
+	return data, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
