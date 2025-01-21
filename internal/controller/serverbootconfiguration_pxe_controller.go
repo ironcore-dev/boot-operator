@@ -18,11 +18,15 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	oras "oras.land/oras-go/v2"
+	orasmemory "oras.land/oras-go/v2/content/memory"
+	orasregistry "oras.land/oras-go/v2/registry/remote"
+
 	"github.com/ironcore-dev/boot-operator/api/v1alpha1"
-	ironcoreimage "github.com/ironcore-dev/ironcore-image"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -32,6 +36,17 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+type OCIIndexManifest struct {
+	Manifests []struct {
+		MediaType   string            `json:"mediaType"`
+		Digest      string            `json:"digest"`
+		Annotations map[string]string `json:"annotations"`
+		Platform    struct {
+			Architecture string `json:"architecture"`
+		} `json:"platform"`
+	} `json:"manifests"`
+}
 
 type ServerBootConfigurationPXEReconciler struct {
 	client.Client
@@ -65,7 +80,7 @@ func (r *ServerBootConfigurationPXEReconciler) reconcileExists(ctx context.Conte
 	return r.reconcile(ctx, log, config)
 }
 
-func (r *ServerBootConfigurationPXEReconciler) delete(ctx context.Context, log logr.Logger, config *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
+func (r *ServerBootConfigurationPXEReconciler) delete(_ context.Context, _ logr.Logger, _ *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
@@ -177,18 +192,98 @@ func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx con
 	return systemIPs, nil
 }
 
-func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(_ context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
+func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
 	imageDetails := strings.Split(config.Spec.Image, ":")
 	if len(imageDetails) != 2 {
 		return "", "", "", fmt.Errorf("invalid image format")
 	}
-	kernelURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerName=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], ironcoreimage.KernelLayerMediaType)
-	initrdURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerName=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], ironcoreimage.InitRAMFSLayerMediaType)
-	// TODO: move this const to ironcore-image
-	const squashFSMediaTypeLayer = "application/vnd.ironcore.image.squashfs.v1alpha1.squashfs"
-	squashFSURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerName=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], squashFSMediaTypeLayer)
+
+	kernelDigest, initrdDigest, squashFSDigest, err := r.getLayerDigestsFromNestedManifest(ctx, imageDetails[0], imageDetails[1])
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to fetch layer digests: %w", err)
+	}
+
+	kernelURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], kernelDigest)
+	initrdURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], initrdDigest)
+	squashFSURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], squashFSDigest)
 
 	return kernelURL, initrdURL, squashFSURL, nil
+}
+
+func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest(ctx context.Context, imageName, version string) (string, string, string, error) {
+	repo, err := orasregistry.NewRepository(imageName)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to create remote repository client: %w", err)
+	}
+
+	store := orasmemory.New()
+	desc, err := oras.Copy(ctx, repo, version, store, version, oras.DefaultCopyOptions)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to fetch index manifest: %w", err)
+	}
+
+	indexManifest, err := store.Fetch(ctx, desc)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to fetch index manifest content: %w", err)
+	}
+
+	defer indexManifest.Close()
+	var nestedManifestDigest string
+	var ociIndexManifest OCIIndexManifest
+	if err := json.NewDecoder(indexManifest).Decode(&ociIndexManifest); err != nil {
+		return "", "", "", fmt.Errorf("failed to decode index manifest: %w", err)
+	}
+
+	for _, layer := range ociIndexManifest.Manifests {
+		if annotations := layer.Annotations; annotations != nil {
+			if strings.HasPrefix(annotations["cname"], "metal_pxe") && layer.Platform.Architecture == "amd64" {
+				nestedManifestDigest = layer.Digest
+				break
+			}
+		}
+	}
+
+	if nestedManifestDigest == "" {
+		return "", "", "", fmt.Errorf("no suitable nested manifest found")
+	}
+
+	nestedRef := fmt.Sprintf("%s@%s", imageName, nestedManifestDigest)
+	nestedDesc, _, err := repo.FetchReference(ctx, nestedRef)
+	//nestedDesc, err := oras.Copy(ctx, repo, nestedRef, store, nestedRef, oras.DefaultCopyOptions)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to fetch nested manifest: %w", err)
+	}
+
+	nestedManifest, err := store.Fetch(ctx, nestedDesc)
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to fetch nested manifest content: %w", err)
+	}
+
+	defer nestedManifest.Close()
+	var nestedIndexManifest OCIIndexManifest
+	if err := json.NewDecoder(nestedManifest).Decode(&nestedIndexManifest); err != nil {
+		return "", "", "", fmt.Errorf("failed to decode nested manifest content: %w", err)
+	}
+
+	var kernelDigest, initrdDigest, squashFSDigest string
+	for _, layer := range nestedIndexManifest.Manifests {
+		if annotations := layer.Annotations; annotations != nil {
+			switch layer.MediaType {
+			case "application/io.gardenlinux.kernel":
+				kernelDigest = layer.Digest
+			case "application/io.gardenlinux.initrd":
+				initrdDigest = layer.Digest
+			case "application/io.gardenlinux.squashfs":
+				squashFSDigest = layer.Digest
+			}
+		}
+	}
+
+	if kernelDigest == "" || initrdDigest == "" || squashFSDigest == "" {
+		return "", "", "", fmt.Errorf("one or more required layers not found in nested manifest")
+	}
+
+	return kernelDigest, initrdDigest, squashFSDigest, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

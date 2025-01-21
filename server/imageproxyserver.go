@@ -13,15 +13,14 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	ociimage "github.com/opencontainers/image-spec/specs-go/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	ghcrIOKey  = "ghcr.io/"
-	imageKey   = "imageName"
-	layerKey   = "layerName"
-	versionKey = "version"
+	ghcrIOKey      = "ghcr.io/"
+	imageKey       = "imageName"
+	layerDigestKey = "layerDigest"
+	versionKey     = "version"
 )
 
 type TokenResponse struct {
@@ -31,7 +30,7 @@ type TokenResponse struct {
 type ImageDetails struct {
 	OCIImageName   string
 	RepositoryName string
-	LayerName      string
+	LayerDigest    string
 	Version        string
 }
 
@@ -69,13 +68,7 @@ func handleGHCR(w http.ResponseWriter, r *http.Request, imageDetails *ImageDetai
 		return
 	}
 
-	digest, err := imageDetails.getLayerDigest(bearerToken)
-	if err != nil {
-		http.Error(w, "Resource Not Found", http.StatusNotFound)
-		log.Info("Error: Failed to obtain layer digest", "error", err)
-		return
-	}
-
+	digest := imageDetails.LayerDigest
 	targetURL := fmt.Sprintf("https://ghcr.io/v2/%s/blobs/%s", imageDetails.RepositoryName, digest)
 	proxyURL, _ := url.Parse(targetURL)
 
@@ -162,18 +155,18 @@ func replaceResponse(originalResp, redirectResp *http.Response) {
 
 func parseImageURL(queries url.Values) (imageDetails ImageDetails, err error) {
 	ociImageName := queries.Get(imageKey)
-	layerName := queries.Get(layerKey)
+	layerDigest := queries.Get(layerDigestKey)
 	version := queries.Get(versionKey)
 	repositoryName := strings.TrimPrefix(ociImageName, ghcrIOKey)
 
-	if ociImageName == "" || layerName == "" || version == "" {
+	if ociImageName == "" || layerDigest == "" || version == "" {
 		return ImageDetails{}, fmt.Errorf("missing required query parameters 'image' or 'layer' or 'version'")
 	}
 
 	return ImageDetails{
 		OCIImageName:   ociImageName,
 		RepositoryName: repositoryName,
-		LayerName:      layerName,
+		LayerDigest:    layerDigest,
 		Version:        version,
 	}, nil
 }
@@ -185,36 +178,4 @@ func (ImageDetails ImageDetails) modifyDirector(proxyURL *url.URL, bearerToken s
 		req.URL.Path = fmt.Sprintf("/v2/%s/blobs/%s", ImageDetails.RepositoryName, digest)
 		req.Header.Set("Authorization", "Bearer "+bearerToken)
 	}
-}
-
-func (imageDetails ImageDetails) getLayerDigest(token string) (string, error) {
-	url := fmt.Sprintf("https://ghcr.io/v2/%s/manifests/%s", imageDetails.RepositoryName, imageDetails.Version)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return "", fmt.Errorf("http request to fetch manifest failed %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/vnd.oci.image.manifest.v1+json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("http client connection failed %w", err)
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	var manifest ociimage.Manifest
-	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
-		return "", fmt.Errorf("unable to decode the manifest %w", err)
-	}
-
-	for _, layer := range manifest.Layers {
-		if strings.Contains(layer.MediaType, imageDetails.LayerName) {
-			return string(layer.Digest), nil
-		}
-	}
-
-	return "", fmt.Errorf("%s layer not found in the manifest", imageDetails.LayerName)
 }
