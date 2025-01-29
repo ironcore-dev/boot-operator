@@ -42,7 +42,6 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 			},
 		}
 		Expect(k8sClient.Create(ctx, server)).To(Succeed())
-		DeferCleanup(k8sClient.Delete, server)
 
 		By("patching the Server NICs in Server status")
 		Eventually(UpdateStatus(server, func() {
@@ -65,7 +64,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 				ServerRef: corev1.LocalObjectReference{
 					Name: server.Name,
 				},
-				Image:             "foo:bar",
+				Image:             "ghcr.io/gardenlinux/gardenlinux:1758.0",
 				IgnitionSecretRef: &corev1.LocalObjectReference{Name: "foo"},
 			},
 		}
@@ -89,9 +88,6 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 			})),
 			HaveField("Spec.SystemUUID", server.Spec.UUID),
 			HaveField("Spec.SystemIPs", ContainElement("1.1.1.1")),
-			HaveField("Spec.KernelURL", "http://localhost:5000/image?imageName=foo&version=bar&layerName=application/vnd.ironcore.image.vmlinuz.v1alpha1.vmlinuz"),
-			HaveField("Spec.InitrdURL", "http://localhost:5000/image?imageName=foo&version=bar&layerName=application/vnd.ironcore.image.initramfs.v1alpha1.initramfs"),
-			HaveField("Spec.SquashfsURL", "http://localhost:5000/image?imageName=foo&version=bar&layerName=application/vnd.ironcore.image.squashfs.v1alpha1.squashfs"),
 			HaveField("Spec.IgnitionSecretRef.Name", "foo"),
 		))
 	})

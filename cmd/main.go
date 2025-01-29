@@ -75,7 +75,9 @@ func main() {
 	var ipxeServiceProtocol string
 	var ipxeServicePort int
 	var imageServerURL string
+	var architecture string
 
+	flag.StringVar(&architecture, "architecture", "amd64", "Target system architecture (e.g., amd64, arm64)")
 	flag.IntVar(&ipxeServicePort, "ipxe-service-port", 5000, "IPXE Service port to listen on.")
 	flag.StringVar(&ipxeServiceProtocol, "ipxe-service-protocol", "http", "IPXE Service Protocol.")
 	flag.StringVar(&ipxeServiceURL, "ipxe-service-url", "", "IPXE Service URL.")
@@ -192,6 +194,7 @@ func main() {
 			Client:         mgr.GetClient(),
 			Scheme:         mgr.GetScheme(),
 			IPXEServiceURL: ipxeServiceURL,
+			Architecture:   architecture,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigPxe")
 			os.Exit(1)
