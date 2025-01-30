@@ -1,20 +1,20 @@
 <p>Packages:</p>
 <ul>
 <li>
-<a href="#metal.ironcore.dev%2fv1alpha1">metal.ironcore.dev/v1alpha1</a>
+<a href="#boot.ironcore.dev%2fv1alpha1">boot.ironcore.dev/v1alpha1</a>
 </li>
 </ul>
-<h2 id="metal.ironcore.dev/v1alpha1">metal.ironcore.dev/v1alpha1</h2>
+<h2 id="boot.ironcore.dev/v1alpha1">boot.ironcore.dev/v1alpha1</h2>
 <div>
 <p>Package v1alpha1 contains API Schema definitions for the settings.gardener.cloud API group</p>
 </div>
 Resource Types:
 <ul><li>
-<a href="#metal.ironcore.dev/v1alpha1.HTTPBootConfig">HTTPBootConfig</a>
+<a href="#boot.ironcore.dev/v1alpha1.HTTPBootConfig">HTTPBootConfig</a>
 </li><li>
-<a href="#metal.ironcore.dev/v1alpha1.IPXEBootConfig">IPXEBootConfig</a>
+<a href="#boot.ironcore.dev/v1alpha1.IPXEBootConfig">IPXEBootConfig</a>
 </li></ul>
-<h3 id="metal.ironcore.dev/v1alpha1.HTTPBootConfig">HTTPBootConfig
+<h3 id="boot.ironcore.dev/v1alpha1.HTTPBootConfig">HTTPBootConfig
 </h3>
 <div>
 <p>HTTPBootConfig is the Schema for the httpbootconfigs API</p>
@@ -33,7 +33,7 @@ Resource Types:
 string</td>
 <td>
 <code>
-metal.ironcore.dev/v1alpha1
+boot.ironcore.dev/v1alpha1
 </code>
 </td>
 </tr>
@@ -62,7 +62,7 @@ Refer to the Kubernetes API documentation for the fields of the
 <td>
 <code>spec</code><br/>
 <em>
-<a href="#metal.ironcore.dev/v1alpha1.HTTPBootConfigSpec">
+<a href="#boot.ironcore.dev/v1alpha1.HTTPBootConfigSpec">
 HTTPBootConfigSpec
 </a>
 </em>
@@ -124,7 +124,7 @@ string
 <td>
 <code>status</code><br/>
 <em>
-<a href="#metal.ironcore.dev/v1alpha1.HTTPBootConfigStatus">
+<a href="#boot.ironcore.dev/v1alpha1.HTTPBootConfigStatus">
 HTTPBootConfigStatus
 </a>
 </em>
@@ -134,7 +134,7 @@ HTTPBootConfigStatus
 </tr>
 </tbody>
 </table>
-<h3 id="metal.ironcore.dev/v1alpha1.IPXEBootConfig">IPXEBootConfig
+<h3 id="boot.ironcore.dev/v1alpha1.IPXEBootConfig">IPXEBootConfig
 </h3>
 <div>
 <p>IPXEBootConfig is the Schema for the ipxebootconfigs API</p>
@@ -153,7 +153,7 @@ HTTPBootConfigStatus
 string</td>
 <td>
 <code>
-metal.ironcore.dev/v1alpha1
+boot.ironcore.dev/v1alpha1
 </code>
 </td>
 </tr>
@@ -182,7 +182,7 @@ Refer to the Kubernetes API documentation for the fields of the
 <td>
 <code>spec</code><br/>
 <em>
-<a href="#metal.ironcore.dev/v1alpha1.IPXEBootConfigSpec">
+<a href="#boot.ironcore.dev/v1alpha1.IPXEBootConfigSpec">
 IPXEBootConfigSpec
 </a>
 </em>
@@ -301,7 +301,7 @@ Kubernetes core/v1.LocalObjectReference
 <td>
 <code>status</code><br/>
 <em>
-<a href="#metal.ironcore.dev/v1alpha1.IPXEBootConfigStatus">
+<a href="#boot.ironcore.dev/v1alpha1.IPXEBootConfigStatus">
 IPXEBootConfigStatus
 </a>
 </em>
@@ -311,10 +311,10 @@ IPXEBootConfigStatus
 </tr>
 </tbody>
 </table>
-<h3 id="metal.ironcore.dev/v1alpha1.HTTPBootConfigSpec">HTTPBootConfigSpec
+<h3 id="boot.ironcore.dev/v1alpha1.HTTPBootConfigSpec">HTTPBootConfigSpec
 </h3>
 <p>
-(<em>Appears on:</em><a href="#metal.ironcore.dev/v1alpha1.HTTPBootConfig">HTTPBootConfig</a>)
+(<em>Appears on:</em><a href="#boot.ironcore.dev/v1alpha1.HTTPBootConfig">HTTPBootConfig</a>)
 </p>
 <div>
 <p>HTTPBootConfigSpec defines the desired state of HTTPBootConfig</p>
@@ -375,10 +375,10 @@ string
 </tr>
 </tbody>
 </table>
-<h3 id="metal.ironcore.dev/v1alpha1.HTTPBootConfigState">HTTPBootConfigState
+<h3 id="boot.ironcore.dev/v1alpha1.HTTPBootConfigState">HTTPBootConfigState
 (<code>string</code> alias)</h3>
 <p>
-(<em>Appears on:</em><a href="#metal.ironcore.dev/v1alpha1.HTTPBootConfigStatus">HTTPBootConfigStatus</a>)
+(<em>Appears on:</em><a href="#boot.ironcore.dev/v1alpha1.HTTPBootConfigStatus">HTTPBootConfigStatus</a>)
 </p>
 <div>
 </div>
@@ -400,10 +400,10 @@ string
 </td>
 </tr></tbody>
 </table>
-<h3 id="metal.ironcore.dev/v1alpha1.HTTPBootConfigStatus">HTTPBootConfigStatus
+<h3 id="boot.ironcore.dev/v1alpha1.HTTPBootConfigStatus">HTTPBootConfigStatus
 </h3>
 <p>
-(<em>Appears on:</em><a href="#metal.ironcore.dev/v1alpha1.HTTPBootConfig">HTTPBootConfig</a>)
+(<em>Appears on:</em><a href="#boot.ironcore.dev/v1alpha1.HTTPBootConfig">HTTPBootConfig</a>)
 </p>
 <div>
 <p>HTTPBootConfigStatus defines the observed state of HTTPBootConfig</p>
@@ -420,7 +420,7 @@ string
 <td>
 <code>state</code><br/>
 <em>
-<a href="#metal.ironcore.dev/v1alpha1.HTTPBootConfigState">
+<a href="#boot.ironcore.dev/v1alpha1.HTTPBootConfigState">
 HTTPBootConfigState
 </a>
 </em>
@@ -430,10 +430,10 @@ HTTPBootConfigState
 </tr>
 </tbody>
 </table>
-<h3 id="metal.ironcore.dev/v1alpha1.IPXEBootConfigSpec">IPXEBootConfigSpec
+<h3 id="boot.ironcore.dev/v1alpha1.IPXEBootConfigSpec">IPXEBootConfigSpec
 </h3>
 <p>
-(<em>Appears on:</em><a href="#metal.ironcore.dev/v1alpha1.IPXEBootConfig">IPXEBootConfig</a>)
+(<em>Appears on:</em><a href="#boot.ironcore.dev/v1alpha1.IPXEBootConfig">IPXEBootConfig</a>)
 </p>
 <div>
 <p>IPXEBootConfigSpec defines the desired state of IPXEBootConfig</p>
@@ -551,10 +551,10 @@ Kubernetes core/v1.LocalObjectReference
 </tr>
 </tbody>
 </table>
-<h3 id="metal.ironcore.dev/v1alpha1.IPXEBootConfigState">IPXEBootConfigState
+<h3 id="boot.ironcore.dev/v1alpha1.IPXEBootConfigState">IPXEBootConfigState
 (<code>string</code> alias)</h3>
 <p>
-(<em>Appears on:</em><a href="#metal.ironcore.dev/v1alpha1.IPXEBootConfigStatus">IPXEBootConfigStatus</a>)
+(<em>Appears on:</em><a href="#boot.ironcore.dev/v1alpha1.IPXEBootConfigStatus">IPXEBootConfigStatus</a>)
 </p>
 <div>
 </div>
@@ -576,10 +576,10 @@ Kubernetes core/v1.LocalObjectReference
 </td>
 </tr></tbody>
 </table>
-<h3 id="metal.ironcore.dev/v1alpha1.IPXEBootConfigStatus">IPXEBootConfigStatus
+<h3 id="boot.ironcore.dev/v1alpha1.IPXEBootConfigStatus">IPXEBootConfigStatus
 </h3>
 <p>
-(<em>Appears on:</em><a href="#metal.ironcore.dev/v1alpha1.IPXEBootConfig">IPXEBootConfig</a>)
+(<em>Appears on:</em><a href="#boot.ironcore.dev/v1alpha1.IPXEBootConfig">IPXEBootConfig</a>)
 </p>
 <div>
 <p>IPXEBootConfigStatus defines the observed state of IPXEBootConfig</p>
@@ -596,7 +596,7 @@ Kubernetes core/v1.LocalObjectReference
 <td>
 <code>state</code><br/>
 <em>
-<a href="#metal.ironcore.dev/v1alpha1.IPXEBootConfigState">
+<a href="#boot.ironcore.dev/v1alpha1.IPXEBootConfigState">
 IPXEBootConfigState
 </a>
 </em>
