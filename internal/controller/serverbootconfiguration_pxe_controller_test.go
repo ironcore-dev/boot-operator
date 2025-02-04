@@ -91,4 +91,65 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 			HaveField("Spec.IgnitionSecretRef.Name", "foo"),
 		))
 	})
+
+	It("should map a new ServerBootConfiguration", func(ctx SpecContext) {
+		By("creating a new Server object")
+		server := &metalv1alpha1.Server{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "server-",
+			},
+			Spec: metalv1alpha1.ServerSpec{
+				UUID: "12345",
+			},
+		}
+		Expect(k8sClient.Create(ctx, server)).To(Succeed())
+
+		By("patching the Server NICs in Server status")
+		Eventually(UpdateStatus(server, func() {
+			server.Status.NetworkInterfaces = []metalv1alpha1.NetworkInterface{
+				{
+					Name:       "foo",
+					IP:         metalv1alpha1.MustParseIP("1.1.1.1"),
+					MACAddress: "abcd",
+				},
+			}
+		})).Should(Succeed())
+
+		By("creating a new ServerBootConfiguration")
+		config := &metalv1alpha1.ServerBootConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:    ns.Name,
+				GenerateName: "test-",
+			},
+			Spec: metalv1alpha1.ServerBootConfigurationSpec{
+				ServerRef: corev1.LocalObjectReference{
+					Name: server.Name,
+				},
+				Image:             "ghcr.io/gardenlinux/gardenlinux:1770.0-metal_pxe-arm64-1770.0-60d819dd-arm64",
+				IgnitionSecretRef: &corev1.LocalObjectReference{Name: "foo"},
+			},
+		}
+		Expect(k8sClient.Create(ctx, config)).To(Succeed())
+
+		By("ensuring that the ipxe boot configuration is correct")
+		bootConfig := &v1alpha1.IPXEBootConfig{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: ns.Name,
+				Name:      config.Name,
+			},
+		}
+		Eventually(Object(bootConfig)).Should(SatisfyAll(
+			HaveField("OwnerReferences", ContainElement(metav1.OwnerReference{
+				APIVersion:         "metal.ironcore.dev/v1alpha1",
+				Kind:               "ServerBootConfiguration",
+				Name:               config.Name,
+				UID:                config.UID,
+				Controller:         ptr.To(true),
+				BlockOwnerDeletion: ptr.To(true),
+			})),
+			HaveField("Spec.SystemUUID", server.Spec.UUID),
+			HaveField("Spec.SystemIPs", ContainElement("1.1.1.1")),
+			HaveField("Spec.IgnitionSecretRef.Name", "foo"),
+		))
+	})
 })
