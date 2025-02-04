@@ -132,7 +132,7 @@ func SetupTest() *corev1.Namespace {
 			Client:         k8sManager.GetClient(),
 			Scheme:         k8sManager.GetScheme(),
 			IPXEServiceURL: "http://localhost:5000",
-			Architecture:   "amd64",
+			Architecture:   "arm64",
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
 		Expect((&ServerBootConfigurationHTTPReconciler{

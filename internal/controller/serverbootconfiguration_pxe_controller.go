@@ -219,42 +219,49 @@ func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest
 		return "", "", "", fmt.Errorf("failed to resolve image reference: %w", err)
 	}
 
-	indexData, err := fetchContent(ctx, resolver, name, desc)
+	targetManifestDesc := desc
+	manifestData, err := fetchContent(ctx, resolver, name, desc)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to fetch index manifest: %w", err)
+		return "", "", "", fmt.Errorf("failed to fetch manifest data: %w", err)
 	}
 
-	var indexManifest ocispec.Index
-	if err := json.Unmarshal(indexData, &indexManifest); err != nil {
+	var manifest ocispec.Manifest
+	if err := json.Unmarshal(manifestData, &manifest); err != nil {
 		return "", "", "", fmt.Errorf("failed to unmarshal index manifest: %w", err)
 	}
 
-	var targetManifestDesc ocispec.Descriptor
-	for _, manifest := range indexManifest.Manifests {
-		if strings.HasPrefix(manifest.Annotations["cname"], CNAMEPrefixMetalPXE) {
-			if manifest.Annotations["architecture"] == r.Architecture {
-				targetManifestDesc = manifest
-				break
+	if desc.MediaType == ocispec.MediaTypeImageIndex {
+		var indexManifest ocispec.Index
+		if err := json.Unmarshal(manifestData, &indexManifest); err != nil {
+			return "", "", "", fmt.Errorf("failed to unmarshal index manifest: %w", err)
+		}
+
+		for _, manifest := range indexManifest.Manifests {
+			if strings.HasPrefix(manifest.Annotations["cname"], CNAMEPrefixMetalPXE) {
+				if manifest.Annotations["architecture"] == r.Architecture {
+					targetManifestDesc = manifest
+					break
+				}
 			}
 		}
-	}
+		if targetManifestDesc.Digest == "" {
+			return "", "", "", fmt.Errorf("failed to find target manifest with cname annotation")
+		}
 
-	if targetManifestDesc.Digest == "" {
-		return "", "", "", fmt.Errorf("failed to find target manifest with cname annotation")
-	}
+		nestedData, err := fetchContent(ctx, resolver, name, targetManifestDesc)
+		if err != nil {
+			return "", "", "", fmt.Errorf("failed to fetch nested manifest: %w", err)
+		}
 
-	nestedData, err := fetchContent(ctx, resolver, name, targetManifestDesc)
-	if err != nil {
-		return "", "", "", fmt.Errorf("failed to fetch nested manifest: %w", err)
-	}
-
-	var nestedManifest ocispec.Manifest
-	if err := json.Unmarshal(nestedData, &nestedManifest); err != nil {
-		return "", "", "", fmt.Errorf("failed to unmarshal nested manifest: %w", err)
+		var nestedManifest ocispec.Manifest
+		if err := json.Unmarshal(nestedData, &nestedManifest); err != nil {
+			return "", "", "", fmt.Errorf("failed to unmarshal nested manifest: %w", err)
+		}
+		manifest = nestedManifest
 	}
 
 	var kernelDigest, initrdDigest, squashFSDigest string
-	for _, layer := range nestedManifest.Layers {
+	for _, layer := range manifest.Layers {
 		if layer.Annotations[AnnotationArchitecture] == r.Architecture {
 			switch layer.MediaType {
 			case MediaTypeKernel:
