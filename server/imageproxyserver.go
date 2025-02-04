@@ -18,6 +18,7 @@ import (
 
 const (
 	ghcrIOKey      = "ghcr.io/"
+	keppelKey      = "keppel.global.cloud.sap/"
 	imageKey       = "imageName"
 	layerDigestKey = "layerDigest"
 	versionKey     = "version"
@@ -45,6 +46,8 @@ func RunImageProxyServer(imageProxyServerAddr string, k8sClient client.Client, l
 
 		if strings.HasPrefix(imageDetails.OCIImageName, ghcrIOKey) {
 			handleGHCR(w, r, &imageDetails, log)
+		} else if strings.HasPrefix(imageDetails.OCIImageName, keppelKey) {
+			handleKeppel(w, r, &imageDetails, log)
 		} else {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			log.Info("Unsupported registry")
@@ -75,6 +78,24 @@ func handleGHCR(w http.ResponseWriter, r *http.Request, imageDetails *ImageDetai
 	proxy := &httputil.ReverseProxy{
 		Director:       imageDetails.modifyDirector(proxyURL, bearerToken, digest),
 		ModifyResponse: modifyProxyResponse(bearerToken),
+	}
+
+	r.URL.Host = proxyURL.Host
+	r.URL.Scheme = proxyURL.Scheme
+	r.Host = proxyURL.Host
+
+	proxy.ServeHTTP(w, r)
+}
+
+func handleKeppel(w http.ResponseWriter, r *http.Request, imageDetails *ImageDetails, log logr.Logger) {
+	log.Info("Processing Image Proxy request for Keppel", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
+
+	digest := imageDetails.LayerDigest
+	targetURL := fmt.Sprintf("https://%sv2/%s/blobs/%s", keppelKey, imageDetails.RepositoryName, digest)
+	proxyURL, _ := url.Parse(targetURL)
+
+	proxy := &httputil.ReverseProxy{
+		Director: imageDetails.modifyDirector(proxyURL, "", digest),
 	}
 
 	r.URL.Host = proxyURL.Host
@@ -157,10 +178,18 @@ func parseImageURL(queries url.Values) (imageDetails ImageDetails, err error) {
 	ociImageName := queries.Get(imageKey)
 	layerDigest := queries.Get(layerDigestKey)
 	version := queries.Get(versionKey)
-	repositoryName := strings.TrimPrefix(ociImageName, ghcrIOKey)
 
 	if ociImageName == "" || layerDigest == "" || version == "" {
 		return ImageDetails{}, fmt.Errorf("missing required query parameters 'image' or 'layer' or 'version'")
+	}
+
+	var repositoryName string
+	if strings.HasPrefix(ociImageName, ghcrIOKey) {
+		repositoryName = strings.TrimPrefix(ociImageName, ghcrIOKey)
+	} else if strings.HasPrefix(ociImageName, keppelKey) {
+		repositoryName = strings.TrimPrefix(ociImageName, keppelKey)
+	} else {
+		return ImageDetails{}, fmt.Errorf("unsupported registry key")
 	}
 
 	return ImageDetails{
@@ -176,6 +205,8 @@ func (ImageDetails ImageDetails) modifyDirector(proxyURL *url.URL, bearerToken s
 		req.URL.Scheme = proxyURL.Scheme
 		req.URL.Host = proxyURL.Host
 		req.URL.Path = fmt.Sprintf("/v2/%s/blobs/%s", ImageDetails.RepositoryName, digest)
-		req.Header.Set("Authorization", "Bearer "+bearerToken)
+		if bearerToken != "" {
+			req.Header.Set("Authorization", "Bearer "+bearerToken)
+		}
 	}
 }
