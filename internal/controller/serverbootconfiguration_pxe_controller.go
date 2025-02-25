@@ -102,6 +102,9 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 
 	kernelURL, initrdURL, squashFSURL, err := r.getImageDetailsFromConfig(ctx, config)
 	if err != nil {
+		if err := r.patchState(ctx, config, metalv1alpha1.ServerBootConfigurationStateError); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch server boot config state to %s: %w", metalv1alpha1.ServerBootConfigurationStateError, err)
+		}
 		return ctrl.Result{}, fmt.Errorf("failed to get image details from BootConfig: %w", err)
 	}
 	log.V(1).Info("Extracted OS image layer details")
