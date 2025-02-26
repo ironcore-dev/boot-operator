@@ -46,13 +46,10 @@ type ServerBootConfigurationPXEReconciler struct {
 }
 
 const (
-	MediaTypeKernel        = "application/io.gardenlinux.kernel"
-	MediaTypeInitrd        = "application/io.gardenlinux.initrd"
-	MediaTypeSquashFS      = "application/io.gardenlinux.squashfs"
-	AnnotationArchitecture = "io.gardenlinux.image.layer.architecture"
-	CNAMEPrefixMetalPXE    = "metal_pxe"
-	ArchitectureAMD64      = "amd64"
-	ArchitectureARM64      = "arm64"
+	MediaTypeKernel     = "application/io.gardenlinux.kernel"
+	MediaTypeInitrd     = "application/io.gardenlinux.initrd"
+	MediaTypeSquashFS   = "application/io.gardenlinux.squashfs"
+	CNAMEPrefixMetalPXE = "metal_pxe"
 )
 
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverbootconfigurations,verbs=get;list;watch
@@ -265,15 +262,13 @@ func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest
 
 	var kernelDigest, initrdDigest, squashFSDigest string
 	for _, layer := range manifest.Layers {
-		if layer.Annotations[AnnotationArchitecture] == r.Architecture {
-			switch layer.MediaType {
-			case MediaTypeKernel:
-				kernelDigest = layer.Digest.String()
-			case MediaTypeInitrd:
-				initrdDigest = layer.Digest.String()
-			case MediaTypeSquashFS:
-				squashFSDigest = layer.Digest.String()
-			}
+		switch layer.MediaType {
+		case MediaTypeKernel:
+			kernelDigest = layer.Digest.String()
+		case MediaTypeInitrd:
+			initrdDigest = layer.Digest.String()
+		case MediaTypeSquashFS:
+			squashFSDigest = layer.Digest.String()
 		}
 	}
 
