@@ -23,6 +23,12 @@ import (
 	"io"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
 	"github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -313,5 +319,37 @@ func (r *ServerBootConfigurationPXEReconciler) SetupWithManager(mgr ctrl.Manager
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metalv1alpha1.ServerBootConfiguration{}).
 		Owns(&v1alpha1.IPXEBootConfig{}).
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueServerBootConfigReferencingIgnitionSecret),
+		).
 		Complete(r)
+}
+
+func (r *ServerBootConfigurationPXEReconciler) enqueueServerBootConfigReferencingIgnitionSecret(ctx context.Context, secret client.Object) []reconcile.Request {
+	log := log.Log.WithValues("secret", secret.GetName())
+	secretObj, ok := secret.(*corev1.Secret)
+	if !ok {
+		log.Error(nil, "can't decode object into Secret", secret)
+		return nil
+	}
+
+	list := &metalv1alpha1.ServerBootConfigurationList{}
+	if err := r.Client.List(ctx, list, client.InNamespace(secretObj.Namespace)); err != nil {
+		log.Error(err, "failed to list ServerBootConfiguration for secret", secret)
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, serverBootConfig := range list.Items {
+		if serverBootConfig.Spec.IgnitionSecretRef != nil && serverBootConfig.Spec.IgnitionSecretRef.Name == secretObj.Name {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      serverBootConfig.Name,
+					Namespace: serverBootConfig.Namespace,
+				},
+			})
+		}
+	}
+	return requests
 }
