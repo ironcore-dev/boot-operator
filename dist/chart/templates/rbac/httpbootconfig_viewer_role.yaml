@@ -1,0 +1,24 @@
+{{- if .Values.rbac.enable }}
+# permissions for end users to view httpbootconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: httpbootconfig-viewer-role
+rules:
+- apiGroups:
+  - boot.ironcore.dev
+  resources:
+  - httpbootconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - boot.ironcore.dev
+  resources:
+  - httpbootconfigs/status
+  verbs:
+  - get
+{{- end -}}
