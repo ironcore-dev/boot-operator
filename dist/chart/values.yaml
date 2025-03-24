@@ -36,7 +36,7 @@ controllerManager:
     seccompProfile:
       type: RuntimeDefault
   terminationGracePeriodSeconds: 10
-  serviceAccountName: boot-operator-controller-manager
+  serviceAccountName: controller-manager
   hostNetwork: false
   nodeSelector:
     kubernetes.io/os: linux
