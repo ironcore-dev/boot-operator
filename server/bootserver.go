@@ -38,6 +38,10 @@ func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient clien
 		handleIPXE(w, r, k8sClient, log, ipxeServiceURL, defaultIpxeTemplateData)
 	})
 
+	http.HandleFunc("/ipxe/", func(w http.ResponseWriter, r *http.Request) {
+		handleIPXE(w, r, k8sClient, log, ipxeServiceURL, defaultIpxeTemplateData)
+	})
+
 	http.HandleFunc("/httpboot", func(w http.ResponseWriter, r *http.Request) {
 		handleHTTPBoot(w, r, k8sClient, log, defaultUKIURL)
 	})
@@ -83,41 +87,27 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 	log.Info("Processing IPXE request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
 	ctx := r.Context()
 
-	clientIP, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		log.Error(err, "Failed to parse client IP address", "clientIP", r.RemoteAddr)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	clientIPs := []string{clientIP}
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		for _, ip := range strings.Split(xff, ",") {
-			trimmedIP := strings.TrimSpace(ip)
-			if trimmedIP != "" {
-				clientIPs = append(clientIPs, trimmedIP)
-			}
-		}
-	}
-
-	var ipxeConfigs bootv1alpha1.IPXEBootConfigList
-	for _, ip := range clientIPs {
-		if err := k8sClient.List(ctx, &ipxeConfigs, client.MatchingFields{bootv1alpha1.SystemIPIndexKey: ip}); err != nil {
-			log.Info("Failed to list IPXEBootConfig for IP", "IP", ip, "error", err)
-			continue
+	if strings.HasPrefix(r.URL.Path, "/ipxe/") {
+		uuid := strings.TrimPrefix(r.URL.Path, "/ipxe/")
+		if uuid == "" {
+			http.Error(w, "Bad Request: UUID is required", http.StatusBadRequest)
+			return
 		}
 
-		if len(ipxeConfigs.Items) > 0 {
-			log.Info("Found IPXEBootConfig", "IP", ip)
-			break
+		ipxeBootConfigList := &bootv1alpha1.IPXEBootConfigList{}
+		err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid})
+		if client.IgnoreNotFound(err) != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
 		}
-	}
 
-	if len(ipxeConfigs.Items) == 0 {
-		log.Info("No IPXEBootConfig found for client IP, delivering default script", "clientIP", clientIP)
-		serveDefaultIPXETemplate(w, log, defaultIpxeTemplateData)
-	} else {
-		config := ipxeConfigs.Items[0]
+		if len(ipxeBootConfigList.Items) == 0 {
+			log.Info("No specified UUID is found, delivering default script")
+			serveDefaultIPXETemplate(w, log, defaultIpxeTemplateData)
+			return
+		}
+
+		config := ipxeBootConfigList.Items[0]
 		if config.Spec.IPXEScriptSecretRef != nil {
 			secret := &corev1.Secret{}
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: config.Spec.IPXEScriptSecretRef.Name, Namespace: config.Namespace}, secret)
@@ -147,7 +137,11 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 			SquashfsURL:   config.Spec.SquashfsURL,
 			IPXEServerURL: ipxeServiceURL,
 		})
+		return
 	}
+
+	log.Info("No UUID is specified, delivering default script")
+	serveDefaultIPXETemplate(w, log, defaultIpxeTemplateData)
 }
 
 func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, uuid string) {
