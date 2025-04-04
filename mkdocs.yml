@@ -49,6 +49,8 @@ markdown_extensions:
 nav:
 - Home: README.md
 - Architecture: architecture.md
+- Usage: 
+  - Bootctl: usage/bootctl.md
 - Development Guide:
   - Documentation: development/dev_docs.md
   - Create Sample UKI Image: development/create_uki.md
