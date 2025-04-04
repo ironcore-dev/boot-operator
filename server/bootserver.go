@@ -33,9 +33,9 @@ type IPXETemplateData struct {
 	IPXEServerURL string
 }
 
-func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultIpxeTemplateData IPXETemplateData, defaultUKIURL string) {
+func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultUKIURL string) {
 	http.HandleFunc("/ipxe/", func(w http.ResponseWriter, r *http.Request) {
-		handleIPXE(w, r, k8sClient, log, ipxeServiceURL, defaultIpxeTemplateData)
+		handleIPXE(w, r, k8sClient, log, ipxeServiceURL)
 	})
 
 	http.HandleFunc("/httpboot", func(w http.ResponseWriter, r *http.Request) {
@@ -79,7 +79,7 @@ func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient clien
 	}
 }
 
-func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, ipxeServiceURL string, defaultIpxeTemplateData IPXETemplateData) {
+func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, ipxeServiceURL string) {
 	log.Info("Processing IPXE request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
 	ctx := r.Context()
 
