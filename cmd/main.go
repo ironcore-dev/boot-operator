@@ -60,7 +60,6 @@ func init() {
 
 func main() {
 	ctx := ctrl.LoggerInto(ctrl.SetupSignalHandler(), setupLog)
-	defaultIpxeTemplateData := NewDefaultIPXETemplateData()
 	defaultHttpUKIURL := NewDefaultHTTPBootData()
 	skipControllerNameValidation := true
 
@@ -254,7 +253,7 @@ func main() {
 	}
 
 	setupLog.Info("starting boot-server")
-	go bootserver.RunBootServer(bootserverAddr, ipxeServiceURL, mgr.GetClient(), serverLog.WithName("bootserver"), *defaultIpxeTemplateData, *defaultHttpUKIURL)
+	go bootserver.RunBootServer(bootserverAddr, ipxeServiceURL, mgr.GetClient(), serverLog.WithName("bootserver"), *defaultHttpUKIURL)
 
 	setupLog.Info("starting image-proxy-server")
 	go bootserver.RunImageProxyServer(imageProxyServerAddr, mgr.GetClient(), serverLog.WithName("imageproxyserver"))
@@ -311,16 +310,6 @@ func IndexHTTPBootConfigBySystemIPs(ctx context.Context, mgr ctrl.Manager) error
 			return HTTPBootConfig.Spec.SystemIPs
 		},
 	)
-}
-
-func NewDefaultIPXETemplateData() *bootserver.IPXETemplateData {
-	var cfg bootserver.IPXETemplateData
-	flag.StringVar(&cfg.KernelURL, "default-kernel-url", "", "Default URL for the kernel")
-	flag.StringVar(&cfg.InitrdURL, "default-initrd-url", "", "Default URL for the initrd")
-	flag.StringVar(&cfg.SquashfsURL, "default-squashfs-url", "", "Default URL for the squashfs")
-	flag.StringVar(&cfg.IPXEServerURL, "default-ipxe-server-url", "", "Default IPXE Server URL to while generating ipxe-script")
-
-	return &cfg
 }
 
 func NewDefaultHTTPBootData() *string {
