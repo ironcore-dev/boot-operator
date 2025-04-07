@@ -33,9 +33,9 @@ type IPXETemplateData struct {
 	IPXEServerURL string
 }
 
-func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultIpxeTemplateData IPXETemplateData, defaultUKIURL string) {
-	http.HandleFunc("/ipxe", func(w http.ResponseWriter, r *http.Request) {
-		handleIPXE(w, r, k8sClient, log, ipxeServiceURL, defaultIpxeTemplateData)
+func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultUKIURL string) {
+	http.HandleFunc("/ipxe/", func(w http.ResponseWriter, r *http.Request) {
+		handleIPXE(w, r, k8sClient, log, ipxeServiceURL)
 	})
 
 	http.HandleFunc("/httpboot", func(w http.ResponseWriter, r *http.Request) {
@@ -79,75 +79,59 @@ func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient clien
 	}
 }
 
-func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, ipxeServiceURL string, defaultIpxeTemplateData IPXETemplateData) {
+func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, ipxeServiceURL string) {
 	log.Info("Processing IPXE request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
 	ctx := r.Context()
 
-	clientIP, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		log.Error(err, "Failed to parse client IP address", "clientIP", r.RemoteAddr)
+	uuid := strings.TrimPrefix(r.URL.Path, "/ipxe/")
+	if uuid == "" {
+		http.Error(w, "Bad Request: UUID is required", http.StatusBadRequest)
+		return
+	}
+
+	ipxeBootConfigList := &bootv1alpha1.IPXEBootConfigList{}
+	err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid})
+	if client.IgnoreNotFound(err) != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	clientIPs := []string{clientIP}
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		for _, ip := range strings.Split(xff, ",") {
-			trimmedIP := strings.TrimSpace(ip)
-			if trimmedIP != "" {
-				clientIPs = append(clientIPs, trimmedIP)
-			}
-		}
+	if len(ipxeBootConfigList.Items) == 0 {
+		log.Info("No IPXEBootConfig found for the given UUID")
+		http.Error(w, "Resource Not Found", http.StatusNotFound)
+		return
 	}
 
-	var ipxeConfigs bootv1alpha1.IPXEBootConfigList
-	for _, ip := range clientIPs {
-		if err := k8sClient.List(ctx, &ipxeConfigs, client.MatchingFields{bootv1alpha1.SystemIPIndexKey: ip}); err != nil {
-			log.Info("Failed to list IPXEBootConfig for IP", "IP", ip, "error", err)
-			continue
-		}
-
-		if len(ipxeConfigs.Items) > 0 {
-			log.Info("Found IPXEBootConfig", "IP", ip)
-			break
-		}
-	}
-
-	if len(ipxeConfigs.Items) == 0 {
-		log.Info("No IPXEBootConfig found for client IP, delivering default script", "clientIP", clientIP)
-		serveDefaultIPXETemplate(w, log, defaultIpxeTemplateData)
-	} else {
-		config := ipxeConfigs.Items[0]
-		if config.Spec.IPXEScriptSecretRef != nil {
-			secret := &corev1.Secret{}
-			err := k8sClient.Get(ctx, types.NamespacedName{Name: config.Spec.IPXEScriptSecretRef.Name, Namespace: config.Namespace}, secret)
-			if err != nil {
-				log.Error(err, "Failed to fetch IPXE script from secret", "SecretName", config.Spec.IPXEScriptSecretRef.Name)
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-
-			ipxeScript, exists := secret.Data[bootv1alpha1.DefaultIPXEScriptKey]
-			if !exists {
-				log.Info("IPXE script not found in the secret", "ExpectedKey", bootv1alpha1.DefaultIPXEScriptKey)
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-
-			if _, err := w.Write(ipxeScript); err != nil {
-				log.Info("Failed to write custom IPXE script", "error", err)
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			}
+	config := ipxeBootConfigList.Items[0]
+	if config.Spec.IPXEScriptSecretRef != nil {
+		secret := &corev1.Secret{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: config.Spec.IPXEScriptSecretRef.Name, Namespace: config.Namespace}, secret)
+		if err != nil {
+			log.Error(err, "Failed to fetch IPXE script from secret", "SecretName", config.Spec.IPXEScriptSecretRef.Name)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 
-		serveDefaultIPXETemplate(w, log, IPXETemplateData{
-			KernelURL:     config.Spec.KernelURL,
-			InitrdURL:     config.Spec.InitrdURL,
-			SquashfsURL:   config.Spec.SquashfsURL,
-			IPXEServerURL: ipxeServiceURL,
-		})
+		ipxeScript, exists := secret.Data[bootv1alpha1.DefaultIPXEScriptKey]
+		if !exists {
+			log.Info("IPXE script not found in the secret", "ExpectedKey", bootv1alpha1.DefaultIPXEScriptKey)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		if _, err := w.Write(ipxeScript); err != nil {
+			log.Info("Failed to write custom IPXE script", "error", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
+		return
 	}
+
+	serveDefaultIPXETemplate(w, log, IPXETemplateData{
+		KernelURL:     config.Spec.KernelURL,
+		InitrdURL:     config.Spec.InitrdURL,
+		SquashfsURL:   config.Spec.SquashfsURL,
+		IPXEServerURL: ipxeServiceURL,
+	})
 }
 
 func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, uuid string) {
