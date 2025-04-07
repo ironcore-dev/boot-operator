@@ -97,7 +97,7 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 	}
 
 	if len(ipxeBootConfigList.Items) == 0 {
-		log.Info("No specified UUID is found, delivering default script")
+		log.Info("No IPXEBootConfig found for the given UUID")
 		http.Error(w, "Resource Not Found", http.StatusNotFound)
 		return
 	}
