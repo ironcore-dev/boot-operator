@@ -17,8 +17,8 @@ func transform[L ~[]E, E any, T any](list L, f func(E) T) []T {
 	return ret
 }
 
-func HTTPBootConfigName(c bootv1alphav1.HTTPBootConfig) string { return c.Namespace + "/" + c.Name }
-func IPXEBootConfigName(c bootv1alphav1.IPXEBootConfig) string { return c.Namespace + "/" + c.Name }
+func httpBootConfigName(c bootv1alphav1.HTTPBootConfig) string { return c.Namespace + "/" + c.Name }
+func ipxeBootConfigName(c bootv1alphav1.IPXEBootConfig) string { return c.Namespace + "/" + c.Name }
 func objName(obj client.Object) string {
 	return obj.GetObjectKind().GroupVersionKind().Kind + ":" + obj.GetNamespace() + "/" + obj.GetName()
 }

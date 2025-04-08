@@ -5,6 +5,7 @@ package cmdutils
 
 import "sigs.k8s.io/controller-runtime/pkg/client"
 
+// Clients structure stores information about source and destination cluster clients.
 type Clients struct {
 	Source client.Client
 	Target client.Client

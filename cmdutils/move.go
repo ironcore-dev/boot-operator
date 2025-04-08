@@ -23,6 +23,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+// Move transfers all BootOperator-related CRs from a source to a target cluster.
+// It verifies object equality and handles secrets and owner references.
 func Move(
 	ctx context.Context,
 	clients Clients,
@@ -36,8 +38,8 @@ func Move(
 		return err
 	}
 	slog.Debug(fmt.Sprintf("found %s CRs in the source cluster", bootv1alphav1.GroupVersion.Group),
-		slog.Any("http boot configs", transform(httpConfigs, HTTPBootConfigName)),
-		slog.Any("ipxe boot configs", transform(ipxeConfigs, IPXEBootConfigName)))
+		slog.Any("http boot configs", transform(httpConfigs, httpBootConfigName)),
+		slog.Any("ipxe boot configs", transform(ipxeConfigs, ipxeBootConfigName)))
 
 	objsToMove, err := getObjsToBeMoved(ctx, clients, httpConfigs, ipxeConfigs)
 	if err != nil {
@@ -114,7 +116,7 @@ func getObjsToBeMoved(
 			continue
 		}
 		return nil, fmt.Errorf(
-			"a %q object already exists in the target cluster and is different then in the source cluster",
+			"a %q object already exists in the target cluster and is different than in the source cluster",
 			sourceObjNN.String())
 	}
 	return objsToMove, nil
@@ -171,7 +173,7 @@ func getSecret(
 		return nil, nil
 	}
 	return nil, fmt.Errorf(
-		"a %q secret already exists in the target cluster and is different then in the source cluster",
+		"a %q secret already exists in the target cluster and is different than in the source cluster",
 		nn.String())
 }
 
