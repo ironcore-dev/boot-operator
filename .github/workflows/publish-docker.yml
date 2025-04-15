@@ -10,6 +10,10 @@ on:
     tags:
     - v*
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+    types: [labeled, unlabeled, opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -67,4 +71,4 @@ jobs:
         platforms: ${{ env.platforms }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        push: ${{ github.event_name != 'pull_request' }}
+        push: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ok-to-publish') }}
