@@ -1,4 +1,4 @@
-# metal-operator documentation
+# boot-operator documentation
 
 ## Local dev setup
 
