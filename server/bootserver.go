@@ -85,7 +85,9 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 
 	uuid := strings.TrimPrefix(r.URL.Path, "/ipxe/")
 	if uuid == "" {
-		http.Error(w, "Bad Request: UUID is required", http.StatusBadRequest)
+		serveDefaultIPXEChainTemplate(w, log, IPXETemplateData{
+			IPXEServerURL: ipxeServiceURL,
+		})
 		return
 	}
 
@@ -217,6 +219,21 @@ func serveDefaultIPXETemplate(w http.ResponseWriter, log logr.Logger, data IPXET
 
 	if err := tmpl.Execute(w, data); err != nil {
 		log.Info("Failed to execute template", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+}
+
+func serveDefaultIPXEChainTemplate(w http.ResponseWriter, log logr.Logger, data IPXETemplateData) {
+	tmplPath := filepath.Join("templates", "ipxe-chainload.tpl")
+	tmpl, err := template.ParseFiles(tmplPath)
+	if err != nil {
+		log.Info("Failed to parse iPXE Chainload template", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	if err := tmpl.Execute(w, data); err != nil {
+		log.Info("Failed to execute iPXE Chainload template", "error", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
