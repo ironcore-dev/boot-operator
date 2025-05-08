@@ -1,12 +1,12 @@
 module github.com/ironcore-dev/boot-operator
 
-go 1.23.0
+go 1.24.0
 
 require (
 	github.com/containerd/containerd v1.7.27
 	github.com/coreos/butane v0.23.0
 	github.com/go-logr/logr v1.4.2
-	github.com/ironcore-dev/controller-utils v0.9.8
+	github.com/ironcore-dev/controller-utils v0.9.9
 	github.com/ironcore-dev/metal v0.0.0-20240624131301-18385f342755
 	github.com/ironcore-dev/metal-operator v0.0.0-20250131095910-06a17dd3b94c
 	github.com/onsi/ginkgo/v2 v2.23.4
@@ -97,7 +97,7 @@ require (
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.32.2 // indirect
+	k8s.io/apiextensions-apiserver v0.32.3 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241212222426-2c72e554b1e7 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
