@@ -335,7 +335,7 @@ func (r *ServerBootConfigurationPXEReconciler) enqueueServerBootConfigReferencin
 	}
 
 	list := &metalv1alpha1.ServerBootConfigurationList{}
-	if err := r.Client.List(ctx, list, client.InNamespace(secretObj.Namespace)); err != nil {
+	if err := r.List(ctx, list, client.InNamespace(secretObj.Namespace)); err != nil {
 		log.Error(err, "failed to list ServerBootConfiguration for secret", secret)
 		return nil
 	}
