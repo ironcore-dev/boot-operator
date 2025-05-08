@@ -4,11 +4,17 @@ env:
   platforms: linux/amd64,linux/arm64
 
 on:
+  release:
+    types:
+      - published
   push:
     branches:
-    - main
+      - main
     tags:
-    - v*
+      - v*
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   pull_request:
     paths-ignore:
       - 'docs/**'
@@ -22,6 +28,11 @@ permissions:
 jobs:
   publish-docker:
     name: Build and publish Docker image
+    # Condition: Run on push to main, published release, OR PR with 'ok-to-image' label
+    if: |
+      github.event_name == 'push' || 
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ok-to-image')) ||
+      (github.event_name == 'release' && github.event.action == 'published')
     runs-on: ubuntu-latest
     steps:
     - name: Check out repository
