@@ -167,10 +167,10 @@ func (r *ServerBootConfigurationHTTPReconciler) getSystemIPFromServer(ctx contex
 }
 
 func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(image string) string {
-	sanitizedImage := strings.Replace(image, "/", "-", -1)
-	sanitizedImage = strings.Replace(sanitizedImage, ":", "-", -1)
-	sanitizedImage = strings.Replace(sanitizedImage, "https://", "", -1)
-	sanitizedImage = strings.Replace(sanitizedImage, "http://", "", -1)
+	sanitizedImage := strings.ReplaceAll(image, "/", "-")
+	sanitizedImage = strings.ReplaceAll(sanitizedImage, ":", "-")
+	sanitizedImage = strings.ReplaceAll(sanitizedImage, "https://", "")
+	sanitizedImage = strings.ReplaceAll(sanitizedImage, "http://", "")
 
 	filename := fmt.Sprintf("%s-uki.efi", sanitizedImage)
 
@@ -199,7 +199,7 @@ func (r *ServerBootConfigurationHTTPReconciler) enqueueServerBootConfigReferenci
 	}
 
 	list := &metalv1alpha1.ServerBootConfigurationList{}
-	if err := r.Client.List(ctx, list, client.InNamespace(secretObj.Namespace)); err != nil {
+	if err := r.List(ctx, list, client.InNamespace(secretObj.Namespace)); err != nil {
 		log.Error(err, "failed to list ServerBootConfiguration for secret", secret)
 		return nil
 	}

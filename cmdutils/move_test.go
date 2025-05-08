@@ -10,7 +10,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sSchema "k8s.io/client-go/kubernetes/scheme"
@@ -48,20 +47,20 @@ var _ = Describe("bootctl move", func() {
 		create(ctx, clients.Source, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}})
 
 		sourceServerBootConfiguration := create(ctx, clients.Source, namedObj(&metalv1alpha1.ServerBootConfiguration{}, "server-boot-configuration"))
-		sourceHttpSecret := create(ctx, clients.Source, namedObj(&v1.Secret{}, "http-secret"))
+		sourceHttpSecret := create(ctx, clients.Source, namedObj(&corev1.Secret{}, "http-secret"))
 		sourceHTTPBootConfig := namedObj(&bootv1alphav1.HTTPBootConfig{}, sourceServerBootConfiguration.Name)
 		sourceHTTPBootConfig.Spec.IgnitionSecretRef = &corev1.LocalObjectReference{Name: sourceHttpSecret.Name}
 		Expect(controllerutil.SetControllerReference(sourceServerBootConfiguration, sourceHTTPBootConfig, k8sSchema.Scheme)).To(Succeed())
 		sourceHTTPBootConfig = create(ctx, clients.Source, sourceHTTPBootConfig)
 
 		sourceCommonServerBootConfiguration := create(ctx, clients.Source, namedObj(&metalv1alpha1.ServerBootConfiguration{}, "common-server-boot-configuration"))
-		sourceHttpCommonSecret := create(ctx, clients.Source, namedObj(&v1.Secret{}, "http-common-secret"))
+		sourceHttpCommonSecret := create(ctx, clients.Source, namedObj(&corev1.Secret{}, "http-common-secret"))
 		sourceCommonHTTPBootConfig := namedObj(&bootv1alphav1.HTTPBootConfig{}, sourceCommonServerBootConfiguration.Name)
 		sourceCommonHTTPBootConfig.Spec.IgnitionSecretRef = &corev1.LocalObjectReference{Name: sourceHttpCommonSecret.Name}
 		Expect(controllerutil.SetControllerReference(sourceCommonServerBootConfiguration, sourceCommonHTTPBootConfig, k8sSchema.Scheme)).To(Succeed())
 		create(ctx, clients.Source, sourceCommonHTTPBootConfig)
 
-		sourceIPXESecret := create(ctx, clients.Source, namedObj(&v1.Secret{}, "ipxe-secret"))
+		sourceIPXESecret := create(ctx, clients.Source, namedObj(&corev1.Secret{}, "ipxe-secret"))
 		sourceIPXEBootConfig := namedObj(&bootv1alphav1.IPXEBootConfig{}, "test-ipxe-boot-config")
 		sourceIPXEBootConfig.Spec.IgnitionSecretRef = &corev1.LocalObjectReference{Name: sourceIPXESecret.Name}
 		sourceIPXEBootConfig = create(ctx, clients.Source, sourceIPXEBootConfig)
@@ -69,17 +68,17 @@ var _ = Describe("bootctl move", func() {
 		// target cluster setup
 		create(ctx, clients.Target, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}})
 
-		targetHttpSecret := create(ctx, clients.Target, namedObj(&v1.Secret{}, sourceHttpSecret.Name))
+		targetHttpSecret := create(ctx, clients.Target, namedObj(&corev1.Secret{}, sourceHttpSecret.Name))
 		targetHTTPBootConfig := namedObj(&bootv1alphav1.HTTPBootConfig{}, sourceHTTPBootConfig.Name)
 
 		targetCommonServerBootConfiguration := create(ctx, clients.Target, namedObj(&metalv1alpha1.ServerBootConfiguration{}, sourceCommonServerBootConfiguration.Name))
-		targetHttpCommonSecret := create(ctx, clients.Target, namedObj(&v1.Secret{}, sourceHttpCommonSecret.Name))
+		targetHttpCommonSecret := create(ctx, clients.Target, namedObj(&corev1.Secret{}, sourceHttpCommonSecret.Name))
 		targetCommonHTTPBootConfig := namedObj(&bootv1alphav1.HTTPBootConfig{}, targetCommonServerBootConfiguration.Name)
 		targetCommonHTTPBootConfig.Spec.IgnitionSecretRef = &corev1.LocalObjectReference{Name: targetHttpCommonSecret.Name}
 		Expect(controllerutil.SetControllerReference(targetCommonServerBootConfiguration, targetCommonHTTPBootConfig, k8sSchema.Scheme)).To(Succeed())
 		create(ctx, clients.Target, targetCommonHTTPBootConfig)
 
-		targetIPXESecret := namedObj(&v1.Secret{}, sourceIPXESecret.Name)
+		targetIPXESecret := namedObj(&corev1.Secret{}, sourceIPXESecret.Name)
 		targetIPXEBootConfig := namedObj(&bootv1alphav1.IPXEBootConfig{}, sourceIPXEBootConfig.Name)
 
 		// TEST

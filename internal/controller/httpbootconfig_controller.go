@@ -134,7 +134,7 @@ func (r *HTTPBootConfigReconciler) enqueueHTTPBootConfigReferencingIgnitionSecre
 	}
 
 	list := &bootv1alpha1.HTTPBootConfigList{}
-	if err := r.Client.List(ctx, list, client.InNamespace("")); err != nil {
+	if err := r.List(ctx, list, client.InNamespace("")); err != nil {
 		log.Error(err, "failed to list HTTPBootConfig for secret", secret)
 		return nil
 	}
