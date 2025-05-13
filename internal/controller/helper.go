@@ -16,8 +16,58 @@ limitations under the License.
 
 package controller
 
-import "sigs.k8s.io/controller-runtime/pkg/client"
+import (
+	"fmt"
+
+	config "github.com/coreos/ignition/v2/config/v3_4"
+	"github.com/coreos/ignition/v2/config/v3_4/types"
+	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
 
 const (
 	fieldOwner = client.FieldOwner("boot.ironcore.dev/controller-manager")
 )
+
+func modifyIgnitionConfig(ignitionData []byte, effectiveHostname string) ([]byte, error) {
+	cfg, report, err := config.Parse(ignitionData)
+	if err != nil || len(report.Entries) != 0 {
+		return []byte(""), fmt.Errorf("failed to parse Ignition config: %v, report: %s", err, report.String())
+	}
+
+	hostnameFound := false
+	for i, file := range cfg.Storage.Files {
+		if file.Path == "/etc/hostname" {
+			source := "data:," + effectiveHostname + "\n"
+			cfg.Storage.Files[i].Contents.Source = &source
+			hostnameFound = true
+			break
+		}
+	}
+
+	if !hostnameFound {
+		source := "data:," + effectiveHostname + "\n"
+		newFile := types.File{
+			Node: types.Node{
+				Path:      "/etc/hostname",
+				Overwrite: new(bool),
+			},
+			FileEmbedded1: types.FileEmbedded1{
+				Mode: new(int),
+				Contents: types.Resource{
+					Source: &source,
+				},
+			},
+		}
+		*newFile.Overwrite = true
+		*newFile.Mode = 0644
+		cfg.Storage.Files = append(cfg.Storage.Files, newFile)
+	}
+
+	serialized, err := yaml.Marshal(&cfg)
+	if err != nil {
+		return []byte(""), fmt.Errorf("failed to serialize Ignition config: %v", err)
+	}
+
+	return serialized, nil
+}

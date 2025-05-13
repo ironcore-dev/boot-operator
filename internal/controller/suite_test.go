@@ -149,3 +149,46 @@ func SetupTest() *corev1.Namespace {
 
 	return ns
 }
+
+func SetupTestWithHostnameOverride() *corev1.Namespace {
+	ns := &corev1.Namespace{}
+
+	BeforeEach(func(ctx SpecContext) {
+		var mgrCtx context.Context
+		mgrCtx, cancel := context.WithCancel(context.Background())
+		DeferCleanup(cancel)
+
+		*ns = corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "test-",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).To(Succeed(), "failed to create test namespace")
+		DeferCleanup(k8sClient.Delete, ns)
+
+		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
+			Scheme: scheme.Scheme,
+			Controller: config.Controller{
+				// need to skip unique controller name validation
+				// since all tests need a dedicated controller
+				SkipNameValidation: ptr.To(true),
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect((&ServerBootConfigurationPXEReconciler{
+			Client:                      k8sManager.GetClient(),
+			Scheme:                      k8sManager.GetScheme(),
+			IPXEServiceURL:              "http://localhost:5000",
+			Architecture:                "arm64",
+			EnforceServerNameasHostname: true,
+		}).SetupWithManager(k8sManager)).To(Succeed())
+
+		go func() {
+			defer GinkgoRecover()
+			Expect(k8sManager.Start(mgrCtx)).To(Succeed(), "failed to start manager")
+		}()
+	})
+
+	return ns
+}

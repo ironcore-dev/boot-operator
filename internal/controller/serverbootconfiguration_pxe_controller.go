@@ -46,9 +46,10 @@ import (
 
 type ServerBootConfigurationPXEReconciler struct {
 	client.Client
-	Scheme         *runtime.Scheme
-	IPXEServiceURL string
-	Architecture   string
+	Scheme                      *runtime.Scheme
+	IPXEServiceURL              string
+	Architecture                string
+	EnforceServerNameasHostname bool
 }
 
 const (
@@ -112,6 +113,16 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 	}
 	log.V(1).Info("Extracted OS image layer details")
 
+	ignitionRefName := config.Spec.IgnitionSecretRef.Name
+
+	if r.EnforceServerNameasHostname {
+		modifiedIgnitionName, err := r.mutateAndApplyServerNameInIgnition(ctx, config)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to mutate server name to hostname in ignition: %w", err)
+		}
+		ignitionRefName = modifiedIgnitionName
+	}
+
 	ipxeConfig := &v1alpha1.IPXEBootConfig{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "boot.ironcore.dev/v1alpha1",
@@ -130,7 +141,9 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 		},
 	}
 	if config.Spec.IgnitionSecretRef != nil {
-		ipxeConfig.Spec.IgnitionSecretRef = config.Spec.IgnitionSecretRef
+		ipxeConfig.Spec.IgnitionSecretRef = &corev1.LocalObjectReference{
+			Name: ignitionRefName,
+		}
 	}
 
 	if err := controllerutil.SetControllerReference(config, ipxeConfig, r.Scheme); err != nil {
@@ -154,6 +167,47 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 
 	log.V(1).Info("Reconciled ServerBootConfiguration")
 	return ctrl.Result{}, nil
+}
+
+func (r *ServerBootConfigurationPXEReconciler) mutateAndApplyServerNameInIgnition(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {
+	ignitionSecret := &corev1.Secret{}
+	if err := r.Get(ctx, client.ObjectKey{Namespace: config.Namespace, Name: config.Spec.IgnitionSecretRef.Name}, ignitionSecret); err != nil {
+		return "", fmt.Errorf("failed to get ignition secret: %w", err)
+	}
+
+	if ignitionSecret.Data[v1alpha1.DefaultIgnitionKey] == nil {
+		return "", fmt.Errorf("ignition data is missing")
+	}
+
+	ignitionData := ignitionSecret.Data[v1alpha1.DefaultIgnitionKey]
+	data, err := modifyIgnitionConfig(ignitionData, config.Spec.ServerRef.Name)
+	if err != nil {
+		return "", fmt.Errorf("failed to modify ignition config: %w", err)
+	}
+
+	modifiedIgnitionSecret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Secret",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: config.Namespace,
+			Name:      config.Name + "-mutated",
+		},
+		Data: map[string][]byte{
+			v1alpha1.DefaultIgnitionKey: data,
+		},
+	}
+
+	if err := controllerutil.SetControllerReference(config, modifiedIgnitionSecret, r.Scheme); err != nil {
+		return "", fmt.Errorf("failed to set controller reference: %w", err)
+	}
+
+	if err := r.Patch(ctx, modifiedIgnitionSecret, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
+		return "", fmt.Errorf("failed to apply modified ignition secret: %w", err)
+	}
+
+	return modifiedIgnitionSecret.Name, nil
 }
 
 func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx context.Context, ipxeConfig *v1alpha1.IPXEBootConfig, config *metalv1alpha1.ServerBootConfiguration) error {
