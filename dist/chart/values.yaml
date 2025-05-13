@@ -40,9 +40,6 @@ controllerManager:
   hostNetwork: false
   strategy:
     type: Recreate
-  nodeSelector:
-    kubernetes.io/os: linux
-    kubernetes.io/arch: arm64
   tolerations:
     - key: node-role.kubernetes.io/control-plane
       effect: NoSchedule
