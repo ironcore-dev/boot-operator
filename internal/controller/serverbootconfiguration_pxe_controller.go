@@ -113,14 +113,14 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 	}
 	log.V(1).Info("Extracted OS image layer details")
 
-	ignitionRefName := config.Spec.IgnitionSecretRef.Name
+	ignitionRef := config.Spec.IgnitionSecretRef
 
 	if r.EnforceServerNameasHostname {
 		modifiedIgnitionName, err := r.mutateAndApplyServerNameInIgnition(ctx, config)
 		if err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to mutate server name to hostname in ignition: %w", err)
 		}
-		ignitionRefName = modifiedIgnitionName
+		ignitionRef = &corev1.LocalObjectReference{Name: modifiedIgnitionName}
 	}
 
 	ipxeConfig := &v1alpha1.IPXEBootConfig{
@@ -141,9 +141,7 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 		},
 	}
 	if config.Spec.IgnitionSecretRef != nil {
-		ipxeConfig.Spec.IgnitionSecretRef = &corev1.LocalObjectReference{
-			Name: ignitionRefName,
-		}
+		ipxeConfig.Spec.IgnitionSecretRef = ignitionRef
 	}
 
 	if err := controllerutil.SetControllerReference(config, ipxeConfig, r.Scheme); err != nil {
