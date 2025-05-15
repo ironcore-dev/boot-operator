@@ -79,7 +79,9 @@ func main() {
 	var ipxeServicePort int
 	var imageServerURL string
 	var architecture string
+	var enforceServerNameasHostname bool
 
+	flag.BoolVar(&enforceServerNameasHostname, "enforce-server-name-as-hostname", false, "Enforce server name as hostname in Ignition config.")
 	flag.StringVar(&architecture, "architecture", "amd64", "Target system architecture (e.g., amd64, arm64)")
 	flag.IntVar(&ipxeServicePort, "ipxe-service-port", 5000, "IPXE Service port to listen on.")
 	flag.StringVar(&ipxeServiceProtocol, "ipxe-service-protocol", "http", "IPXE Service Protocol.")
@@ -239,10 +241,11 @@ func main() {
 
 	if controllers.Enabled(serverBootConfigControllerPxe) {
 		if err = (&controller.ServerBootConfigurationPXEReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			IPXEServiceURL: ipxeServiceURL,
-			Architecture:   architecture,
+			Client:                      mgr.GetClient(),
+			Scheme:                      mgr.GetScheme(),
+			IPXEServiceURL:              ipxeServiceURL,
+			Architecture:                architecture,
+			EnforceServerNameasHostname: enforceServerNameasHostname,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigPxe")
 			os.Exit(1)
