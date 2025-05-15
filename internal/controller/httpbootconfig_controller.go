@@ -29,7 +29,7 @@ type HTTPBootConfigReconciler struct {
 //+kubebuilder:rbac:groups=boot.ironcore.dev,resources=httpbootconfigs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=boot.ironcore.dev,resources=httpbootconfigs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=boot.ironcore.dev,resources=httpbootconfigs/finalizers,verbs=update
-//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;patch
 
 func (r *HTTPBootConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)

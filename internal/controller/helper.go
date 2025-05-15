@@ -30,7 +30,7 @@ const (
 )
 
 func modifyIgnitionConfig(ignitionData []byte, effectiveHostname string) ([]byte, error) {
-	cfg, report, err := config.Parse(ignitionData)
+	cfg, report, err := config.ParseCompatibleVersion(ignitionData)
 	if err != nil || len(report.Entries) != 0 {
 		return []byte(""), fmt.Errorf("failed to parse Ignition config: %v, report: %s", err, report.String())
 	}
