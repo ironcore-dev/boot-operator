@@ -17,11 +17,11 @@ limitations under the License.
 package controller
 
 import (
+	"encoding/json"
 	"fmt"
 
 	config "github.com/coreos/ignition/v2/config/v3_4"
 	"github.com/coreos/ignition/v2/config/v3_4/types"
-	"gopkg.in/yaml.v3"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -38,7 +38,7 @@ func modifyIgnitionConfig(ignitionData []byte, effectiveHostname string) ([]byte
 	hostnameFound := false
 	for i, file := range cfg.Storage.Files {
 		if file.Path == "/etc/hostname" {
-			source := "data:," + effectiveHostname + "\n"
+			source := "data:," + effectiveHostname + "%0A"
 			cfg.Storage.Files[i].Contents.Source = &source
 			hostnameFound = true
 			break
@@ -46,7 +46,7 @@ func modifyIgnitionConfig(ignitionData []byte, effectiveHostname string) ([]byte
 	}
 
 	if !hostnameFound {
-		source := "data:," + effectiveHostname + "\n"
+		source := "data:," + effectiveHostname + "%0A"
 		newFile := types.File{
 			Node: types.Node{
 				Path:      "/etc/hostname",
@@ -64,7 +64,7 @@ func modifyIgnitionConfig(ignitionData []byte, effectiveHostname string) ([]byte
 		cfg.Storage.Files = append(cfg.Storage.Files, newFile)
 	}
 
-	serialized, err := yaml.Marshal(&cfg)
+	serialized, err := json.Marshal(&cfg)
 	if err != nil {
 		return []byte(""), fmt.Errorf("failed to serialize Ignition config: %v", err)
 	}
