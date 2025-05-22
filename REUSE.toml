@@ -4,13 +4,43 @@ SPDX-PackageSupplier = "IronCore authors <ospo@sap.com>"
 SPDX-PackageDownloadLocation = "https://github.com/ironcore-dev/boot-operator"
 
 [[annotations]]
-path = [".github/**", ".gitignore", "CODEOWNERS", "Dockerfile", "Makefile", "PROJECT", "config/**", "gen/**", "go.mod", "go.sum", "hack/**", "server/**", "templates/**", "internal/**", "cmd/**", "api/**", "config/**", "test/**", "CONTRIBUTING.md", "PROJECT", "mkdocs.yml", ".dockerignore", ".golangci.yml", "REUSE.toml"]
+path = [
+    ".github/**",
+    ".gitignore",
+    "CODEOWNERS",
+    "Dockerfile",
+    "Makefile",
+    "PROJECT",
+    "config/**",
+    "dist/**",
+    "dist/**",
+    "gen/**",
+    "go.mod",
+    "go.sum",
+    "hack/**",
+    "server/**",
+    "templates/**",
+    "internal/**",
+    "cmd/**",
+    "api/**",
+    "config/**",
+    "test/**",
+    "CONTRIBUTING.md",
+    "PROJECT",
+    "mkdocs.yml",
+    ".dockerignore",
+    ".golangci.yml",
+    "REUSE.toml"
+]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025 SAP SE or an SAP affiliate company and IronCore contributors"
 SPDX-License-Identifier = "Apache-2.0"
 
 [[annotations]]
-path = ["docs/**", "README.md"]
+path = [
+    "docs/**",
+    "README.md"
+]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "2025 SAP SE or an SAP affiliate company and IronCore contributors"
 SPDX-License-Identifier = "Apache-2.0"

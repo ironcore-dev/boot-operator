@@ -1,0 +1,28 @@
+{{- if .Values.rbac.enable }}
+# permissions for end users to edit httpbootconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+  name: httpbootconfig-editor-role
+rules:
+- apiGroups:
+  - boot.ironcore.dev
+  resources:
+  - httpbootconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - boot.ironcore.dev
+  resources:
+  - httpbootconfigs/status
+  verbs:
+  - get
+{{- end -}}
