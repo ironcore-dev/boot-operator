@@ -1,3 +1,4 @@
+{{- if .Values.controllerManager.enable }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -51,12 +52,20 @@ spec:
             {{- toYaml .Values.controllerManager.manager.resources | nindent 12 }}
           securityContext:
             {{- toYaml .Values.controllerManager.manager.containerSecurityContext | nindent 12 }}
-          {{- if and .Values.certmanager.enable (or .Values.webhook.enable .Values.metrics.enable) }}
+          {{- if or (and .Values.certmanager.enable (or .Values.webhook.enable .Values.metrics.enable))
+                    .Values.controllerManager.manager.volumes }}
           volumeMounts:
             {{- if and .Values.metrics.enable .Values.certmanager.enable }}
             - name: metrics-certs
               mountPath: /tmp/k8s-metrics-server/metrics-certs
               readOnly: true
+            {{- end }}
+            {{- range $volume := .Values.controllerManager.manager.volumes }}
+            - name: {{ $volume.name }}
+              mountPath: {{ $volume.mountPath }}
+              {{- if $volume.readOnly }}
+              readOnly: true
+              {{- end }}
             {{- end }}
           {{- end }}
       securityContext:
@@ -64,15 +73,21 @@ spec:
       serviceAccountName: {{ .Values.controllerManager.serviceAccountName }}
       hostNetwork: {{ .Values.controllerManager.hostNetwork }}
       terminationGracePeriodSeconds: {{ .Values.controllerManager.terminationGracePeriodSeconds }}
-      {{- if and .Values.certmanager.enable (or .Values.webhook.enable .Values.metrics.enable) }}
+      {{- if or (and .Values.certmanager.enable (or .Values.webhook.enable .Values.metrics.enable))
+                .Values.controllerManager.manager.volumes }}
       volumes:
         {{- if and .Values.metrics.enable .Values.certmanager.enable }}
         - name: metrics-certs
           secret:
             secretName: metrics-server-cert
         {{- end }}
+        {{- range $volume := .Values.controllerManager.manager.volumes }}
+        - name: {{ $volume.name }}
+          {{- toYaml $volume.source | nindent 8 }}
+        {{- end }}
       {{- end }}
       {{- if .Values.controllerManager.tolerations }}
       tolerations:
         {{- toYaml .Values.controllerManager.tolerations | nindent 8 }}
       {{- end }}
+{{- end }}
