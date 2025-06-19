@@ -8,7 +8,7 @@ metadata:
     {{- include "chart.labels" . | nindent 4 }}
     control-plane: controller-manager
 spec:
-  replicas:  {{ .Values.controllerManager.replicas }}
+  replicas: {{ .Values.controllerManager.replicas }}
   strategy:
     type: {{ .Values.controllerManager.strategy.type | quote }}
   selector:
@@ -83,7 +83,7 @@ spec:
         {{- end }}
         {{- range $volume := .Values.controllerManager.manager.volumes }}
         - name: {{ $volume.name }}
-          {{- toYaml $volume.source | nindent 8 }}
+          {{- toYaml $volume.source | nindent 10 }}
         {{- end }}
       {{- end }}
       {{- if .Values.controllerManager.tolerations }}
