@@ -41,7 +41,7 @@ spec:
           env:
             {{- range $key, $value := .Values.controllerManager.manager.env }}
             - name: {{ $key }}
-              value: {{ $value }}
+              value: {{ $value | quote }}
             {{- end }}
           {{- end }}
           {{- if .Values.controllerManager.manager.ports }}
