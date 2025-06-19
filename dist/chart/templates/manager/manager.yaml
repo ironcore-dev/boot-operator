@@ -44,6 +44,14 @@ spec:
               value: {{ $value }}
             {{- end }}
           {{- end }}
+          {{- if .Values.controllerManager.manager.ports }}
+          ports:
+            {{- range $port := .Values.controllerManager.manager.ports }}
+            - name: {{ $port.name }}
+              containerPort: {{ $port.containerPort }}
+              protocol: {{ $port.protocol | default "TCP" }}
+            {{- end }}
+          {{- end }}
           livenessProbe:
             {{- toYaml .Values.controllerManager.manager.livenessProbe | nindent 12 }}
           readinessProbe:
