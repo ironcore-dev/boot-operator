@@ -191,7 +191,7 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 ADDLICENSE ?= $(LOCALBIN)/addlicense
 GOIMPORTS ?= $(LOCALBIN)/goimports
 GEN_CRD_API_REFERENCE_DOCS ?= $(LOCALBIN)/gen-crd-api-reference-docs
-KUBEBUILDER ?= $(LOCALBIN)/kubebuilder-$(KUBEBUILDER_VERSION)
+KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.5.0
