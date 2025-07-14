@@ -52,10 +52,9 @@ type ServerBootConfigurationPXEReconciler struct {
 }
 
 const (
-	MediaTypeKernel     = "application/io.gardenlinux.kernel"
-	MediaTypeInitrd     = "application/io.gardenlinux.initrd"
-	MediaTypeSquashFS   = "application/io.gardenlinux.squashfs"
-	CNAMEPrefixMetalPXE = "metal_pxe"
+	MediaTypeKernel   = "application/vnd.ironcore.image.kernel"
+	MediaTypeInitrd   = "application/vnd.ironcore.image.initramfs"
+	MediaTypeSquashFS = "application/vnd.ironcore.image.squashfs"
 )
 
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverbootconfigurations,verbs=get;list;watch
@@ -243,15 +242,16 @@ func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest
 		}
 
 		for _, manifest := range indexManifest.Manifests {
-			if strings.HasPrefix(manifest.Annotations["cname"], CNAMEPrefixMetalPXE) {
-				if manifest.Annotations["architecture"] == r.Architecture {
+			platform := manifest.Platform
+			if manifest.Platform != nil {
+				if platform.Architecture == r.Architecture {
 					targetManifestDesc = manifest
 					break
 				}
 			}
 		}
 		if targetManifestDesc.Digest == "" {
-			return "", "", "", fmt.Errorf("failed to find target manifest with cname annotation")
+			return "", "", "", fmt.Errorf("failed to find target manifest with architecture %s", r.Architecture)
 		}
 
 		nestedData, err := fetchContent(ctx, resolver, name, targetManifestDesc)
