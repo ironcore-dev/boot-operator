@@ -254,6 +254,7 @@ func main() {
 			Client:         mgr.GetClient(),
 			Scheme:         mgr.GetScheme(),
 			ImageServerURL: imageServerURL,
+			Architecture:   architecture,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigHttp")
 			os.Exit(1)

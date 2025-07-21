@@ -52,10 +52,13 @@ type ServerBootConfigurationPXEReconciler struct {
 }
 
 const (
-	MediaTypeKernel     = "application/io.gardenlinux.kernel"
-	MediaTypeInitrd     = "application/io.gardenlinux.initrd"
-	MediaTypeSquashFS   = "application/io.gardenlinux.squashfs"
-	CNAMEPrefixMetalPXE = "metal_pxe"
+	MediaTypeKernel      = "application/vnd.ironcore.image.kernel"
+	MediaTypeInitrd      = "application/vnd.ironcore.image.initramfs"
+	MediaTypeSquashFS    = "application/vnd.ironcore.image.squashfs"
+	MediaTypeKernelOld   = "application/io.gardenlinux.kernel"
+	MediaTypeInitrdOld   = "application/io.gardenlinux.initrd"
+	MediaTypeSquashFSOld = "application/io.gardenlinux.squashfs"
+	CNAMEPrefixMetalPXE  = "metal_pxe"
 )
 
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverbootconfigurations,verbs=get;list;watch
@@ -242,6 +245,8 @@ func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest
 			return "", "", "", fmt.Errorf("failed to unmarshal index manifest: %w", err)
 		}
 
+		// Backward compatibility for CNAME prefix based OCI
+		// TODO: To be removed later
 		for _, manifest := range indexManifest.Manifests {
 			if strings.HasPrefix(manifest.Annotations["cname"], CNAMEPrefixMetalPXE) {
 				if manifest.Annotations["architecture"] == r.Architecture {
@@ -250,8 +255,21 @@ func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest
 				}
 			}
 		}
+
 		if targetManifestDesc.Digest == "" {
-			return "", "", "", fmt.Errorf("failed to find target manifest with cname annotation")
+			for _, manifest := range indexManifest.Manifests {
+				platform := manifest.Platform
+				if manifest.Platform != nil {
+					if platform.Architecture == r.Architecture {
+						targetManifestDesc = manifest
+						break
+					}
+				}
+			}
+		}
+
+		if targetManifestDesc.Digest == "" {
+			return "", "", "", fmt.Errorf("failed to find target manifest with architecture %s", r.Architecture)
 		}
 
 		nestedData, err := fetchContent(ctx, resolver, name, targetManifestDesc)
@@ -274,6 +292,12 @@ func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest
 		case MediaTypeInitrd:
 			initrdDigest = layer.Digest.String()
 		case MediaTypeSquashFS:
+			squashFSDigest = layer.Digest.String()
+		case MediaTypeKernelOld:
+			kernelDigest = layer.Digest.String()
+		case MediaTypeInitrdOld:
+			initrdDigest = layer.Digest.String()
+		case MediaTypeSquashFSOld:
 			squashFSDigest = layer.Digest.String()
 		}
 	}

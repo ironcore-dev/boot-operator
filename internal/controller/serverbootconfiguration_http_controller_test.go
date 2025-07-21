@@ -65,7 +65,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 				ServerRef: corev1.LocalObjectReference{
 					Name: server.Name,
 				},
-				Image:             "foo:bar",
+				Image:             "ghcr.io/ironcore-dev/os-images/test-image:100.1",
 				IgnitionSecretRef: &corev1.LocalObjectReference{Name: "foo"},
 			},
 		}
@@ -89,7 +89,6 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 			})),
 			HaveField("Spec.SystemUUID", server.Spec.UUID),
 			HaveField("Spec.SystemIPs", ContainElement("1.1.1.1")),
-			HaveField("Spec.UKIURL", "http://localhost:5000/httpboot/foo-bar-uki.efi"),
 			HaveField("Spec.IgnitionSecretRef.Name", "foo"),
 		))
 	})

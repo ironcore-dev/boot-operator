@@ -54,11 +54,64 @@ func RunImageProxyServer(imageProxyServerAddr string, k8sClient client.Client, l
 		}
 	})
 
+	http.HandleFunc("/httpboot/", func(w http.ResponseWriter, r *http.Request) {
+		log.Info("Processing HTTPBoot request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
+
+		imageDetails, err := parseHttpBootImagePath(r.URL.Path)
+		if err != nil {
+			http.Error(w, "Resource Not Found", http.StatusNotFound)
+			log.Info("Error: Failed to parse the image path", "URL", r.URL.Path, "Error", err)
+			return
+		}
+
+		if strings.HasPrefix(imageDetails.OCIImageName, ghcrIOKey) {
+			handleGHCR(w, r, &imageDetails, log)
+		} else if strings.HasPrefix(imageDetails.OCIImageName, keppelKey) {
+			handleKeppel(w, r, &imageDetails, log)
+		} else {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			log.Info("Unsupported registry")
+		}
+	})
+
 	log.Info("Starting image proxy server", "address", imageProxyServerAddr)
 	if err := http.ListenAndServe(imageProxyServerAddr, nil); err != nil {
 		log.Error(err, "failed to start image proxy server")
 		panic(err)
 	}
+}
+
+func parseHttpBootImagePath(path string) (ImageDetails, error) {
+	trimmed := strings.TrimPrefix(path, "/httpboot/")
+	segments := strings.Split(trimmed, "/")
+	if len(segments) < 2 {
+		return ImageDetails{}, fmt.Errorf("invalid path: too few segments")
+	}
+
+	imageName := strings.Join(segments[:len(segments)-1], "/")
+	digestSegment := segments[len(segments)-1]
+
+	var repositoryName string
+	if strings.HasPrefix(imageName, ghcrIOKey) {
+		repositoryName = strings.TrimPrefix(imageName, ghcrIOKey)
+	} else if strings.HasPrefix(imageName, keppelKey) {
+		repositoryName = strings.TrimPrefix(imageName, keppelKey)
+	} else {
+		return ImageDetails{}, fmt.Errorf("unsupported registry key")
+	}
+
+	digestSegment = strings.TrimSuffix(digestSegment, ".efi")
+
+	if !strings.HasPrefix(digestSegment, "sha256-") {
+		return ImageDetails{}, fmt.Errorf("invalid digest format")
+	}
+	layerDigest := "sha256:" + strings.TrimPrefix(digestSegment, "sha256-")
+
+	return ImageDetails{
+		OCIImageName:   imageName,
+		LayerDigest:    layerDigest,
+		RepositoryName: repositoryName,
+	}, nil
 }
 
 func handleGHCR(w http.ResponseWriter, r *http.Request, imageDetails *ImageDetails, log logr.Logger) {
@@ -131,6 +184,7 @@ func (imageDetails ImageDetails) getBearerToken() (string, error) {
 func modifyProxyResponse(bearerToken string) func(*http.Response) error {
 	return func(resp *http.Response) error {
 		resp.Header.Set("Authorization", "Bearer "+bearerToken)
+
 		if resp.StatusCode == http.StatusTemporaryRedirect {
 			location, err := resp.Location()
 			if err != nil {
@@ -142,7 +196,6 @@ func modifyProxyResponse(bearerToken string) func(*http.Response) error {
 			if err != nil {
 				return err
 			}
-
 			copyHeaders(resp.Request.Header, redirectReq.Header)
 
 			redirectResp, err := client.Do(redirectReq)
@@ -152,6 +205,21 @@ func modifyProxyResponse(bearerToken string) func(*http.Response) error {
 
 			replaceResponse(resp, redirectResp)
 		}
+
+		// Rewrite media type if it's a UKI
+		if ct := resp.Header.Get("Content-Type"); ct == "application/vnd.ironcore.image.uki" {
+			resp.Header.Set("Content-Type", "application/efi")
+		}
+
+		if resp.Header.Get("Content-Length") == "" && resp.ContentLength > 0 {
+			resp.Header.Set("Content-Length", fmt.Sprintf("%d", resp.ContentLength))
+		}
+
+		if len(resp.TransferEncoding) > 0 {
+			resp.TransferEncoding = nil
+			resp.Header.Del("Transfer-Encoding")
+		}
+
 		return nil
 	}
 }
@@ -183,6 +251,7 @@ func parseImageURL(queries url.Values) (imageDetails ImageDetails, err error) {
 		return ImageDetails{}, fmt.Errorf("missing required query parameters 'image' or 'layer' or 'version'")
 	}
 
+	ociImageName = strings.TrimSuffix(ociImageName, ".efi")
 	var repositoryName string
 	if strings.HasPrefix(ociImageName, ghcrIOKey) {
 		repositoryName = strings.TrimPrefix(ociImageName, ghcrIOKey)
