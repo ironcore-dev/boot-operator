@@ -5,8 +5,12 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/containerd/containerd/remotes/docker"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,10 +29,15 @@ import (
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 )
 
+const (
+	MediaTypeUKI = "application/vnd.ironcore.image.uki"
+)
+
 type ServerBootConfigurationHTTPReconciler struct {
 	client.Client
 	Scheme         *runtime.Scheme
 	ImageServerURL string
+	Architecture   string
 }
 
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverbootconfigurations,verbs=get;list;watch
@@ -75,7 +84,10 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 	}
 	log.V(1).Info("Got system IPs from Server", "systemIPs", systemIPs)
 
-	ukiURL := r.constructUKIURL(config.Spec.Image)
+	ukiURL, err := r.constructUKIURL(ctx, config.Spec.Image)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to construct UKI URL: %w", err)
+	}
 	log.V(1).Info("Extracted UKI URL for boot")
 
 	httpBootConfig := &bootv1alpha1.HTTPBootConfig{
@@ -166,16 +178,75 @@ func (r *ServerBootConfigurationHTTPReconciler) getSystemIPFromServer(ctx contex
 	return systemIPs, nil
 }
 
-func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(image string) string {
-	sanitizedImage := strings.ReplaceAll(image, "/", "-")
-	sanitizedImage = strings.ReplaceAll(sanitizedImage, ":", "-")
-	sanitizedImage = strings.ReplaceAll(sanitizedImage, "https://", "")
-	sanitizedImage = strings.ReplaceAll(sanitizedImage, "http://", "")
+func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(ctx context.Context, image string) (string, error) {
+	imageDetails := strings.Split(image, ":")
+	if len(imageDetails) != 2 {
+		return "", fmt.Errorf("invalid image format")
+	}
 
-	filename := fmt.Sprintf("%s-uki.efi", sanitizedImage)
+	ukiDigest, err := r.getUKIDigestFromNestedManifest(ctx, imageDetails[0], imageDetails[1])
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch UKI layer digest: %w", err)
+	}
 
-	ukiURL := fmt.Sprintf("%s/%s", r.ImageServerURL, filename)
-	return ukiURL
+	ukiDigest = strings.TrimPrefix(ukiDigest, "sha256:")
+	ukiURL := fmt.Sprintf("%s/%s/sha256-%s.efi", r.ImageServerURL, imageDetails[0], ukiDigest)
+	return ukiURL, nil
+}
+
+func (r *ServerBootConfigurationHTTPReconciler) getUKIDigestFromNestedManifest(ctx context.Context, imageName, imageVersion string) (string, error) {
+	resolver := docker.NewResolver(docker.ResolverOptions{})
+	imageRef := fmt.Sprintf("%s:%s", imageName, imageVersion)
+	name, desc, err := resolver.Resolve(ctx, imageRef)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve image reference: %w", err)
+	}
+
+	targetManifestDesc := desc
+	manifestData, err := fetchContent(ctx, resolver, name, desc)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch manifest data: %w", err)
+	}
+
+	var manifest ocispec.Manifest
+	if desc.MediaType == ocispec.MediaTypeImageIndex {
+		var indexManifest ocispec.Index
+		if err := json.Unmarshal(manifestData, &indexManifest); err != nil {
+			return "", fmt.Errorf("failed to unmarshal index manifest: %w", err)
+		}
+
+		for _, manifest := range indexManifest.Manifests {
+			platform := manifest.Platform
+			if manifest.Platform != nil && platform.Architecture == r.Architecture {
+				targetManifestDesc = manifest
+				break
+			}
+		}
+		if targetManifestDesc.Digest == "" {
+			return "", fmt.Errorf("failed to find target manifest with architecture %s", r.Architecture)
+		}
+
+		nestedData, err := fetchContent(ctx, resolver, name, targetManifestDesc)
+		if err != nil {
+			return "", fmt.Errorf("failed to fetch nested manifest: %w", err)
+		}
+
+		if err := json.Unmarshal(nestedData, &manifest); err != nil {
+			return "", fmt.Errorf("failed to unmarshal nested manifest: %w", err)
+		}
+	} else {
+		if err := json.Unmarshal(manifestData, &manifest); err != nil {
+			return "", fmt.Errorf("failed to unmarshal manifest: %w", err)
+		}
+	}
+
+	for _, layer := range manifest.Layers {
+		if layer.MediaType == MediaTypeUKI {
+			return layer.Digest.String(), nil
+		}
+	}
+
+	return "", fmt.Errorf("UKI layer digest not found")
 }
 
 // SetupWithManager sets up the controller with the Manager.
