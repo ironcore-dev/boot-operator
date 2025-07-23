@@ -22,6 +22,7 @@ const (
 	imageKey       = "imageName"
 	layerDigestKey = "layerDigest"
 	versionKey     = "version"
+	MediaTypeUKI   = "application/vnd.ironcore.image.uki"
 )
 
 type TokenResponse struct {
@@ -207,7 +208,7 @@ func modifyProxyResponse(bearerToken string) func(*http.Response) error {
 		}
 
 		// Rewrite media type if it's a UKI
-		if ct := resp.Header.Get("Content-Type"); ct == "application/vnd.ironcore.image.uki" {
+		if ct := resp.Header.Get("Content-Type"); ct == MediaTypeUKI {
 			resp.Header.Set("Content-Type", "application/efi")
 		}
 
