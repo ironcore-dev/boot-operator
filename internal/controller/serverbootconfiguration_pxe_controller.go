@@ -228,7 +228,6 @@ func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest
 		return "", "", "", fmt.Errorf("failed to resolve image reference: %w", err)
 	}
 
-	targetManifestDesc := desc
 	manifestData, err := fetchContent(ctx, resolver, name, desc)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to fetch manifest data: %w", err)
@@ -240,6 +239,7 @@ func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest
 	}
 
 	if desc.MediaType == ocispec.MediaTypeImageIndex {
+		var targetManifestDesc ocispec.Descriptor
 		var indexManifest ocispec.Index
 		if err := json.Unmarshal(manifestData, &indexManifest); err != nil {
 			return "", "", "", fmt.Errorf("failed to unmarshal index manifest: %w", err)
