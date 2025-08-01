@@ -31,7 +31,7 @@ import (
 var _ = Describe("ServerBootConfiguration Controller", func() {
 	ns := SetupTest()
 
-	It("should map a new ServerBootConfiguration", func(ctx SpecContext) {
+	It("should map a ServerBootConfiguration using ironcore oci image", func(ctx SpecContext) {
 		By("creating a new Server object")
 		server := &metalv1alpha1.Server{
 			ObjectMeta: metav1.ObjectMeta{
@@ -64,7 +64,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 				ServerRef: corev1.LocalObjectReference{
 					Name: server.Name,
 				},
-				Image:             "ghcr.io/ironcore-dev/os-images/test-image:100.1",
+				Image:             "ghcr.io/ironcore-dev/os-images/gardenlinux:1877.0",
 				IgnitionSecretRef: &corev1.LocalObjectReference{Name: "foo"},
 			},
 		}
@@ -92,7 +92,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 		))
 	})
 
-	It("should map a new ServerBootConfiguration", func(ctx SpecContext) {
+	It("should map a ServerBootConfiguration using gardenlinux oci image", func(ctx SpecContext) {
 		By("creating a new Server object")
 		server := &metalv1alpha1.Server{
 			ObjectMeta: metav1.ObjectMeta{
@@ -125,7 +125,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 				ServerRef: corev1.LocalObjectReference{
 					Name: server.Name,
 				},
-				Image:             "ghcr.io/ironcore-dev/os-images/test-image:100.1",
+				Image:             "ghcr.io/gardenlinux/gardenlinux:1772.0",
 				IgnitionSecretRef: &corev1.LocalObjectReference{Name: "foo"},
 			},
 		}
