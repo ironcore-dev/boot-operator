@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -104,6 +105,36 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 		return
 	}
 
+	if len(ipxeBootConfigList.Items) == 0 {
+		// Fuzzy segment-based match
+		requestSegments := normalizeAndSortUUIDSegments(uuid)
+
+		allConfigs := &bootv1alpha1.IPXEBootConfigList{}
+		if err := k8sClient.List(ctx, allConfigs); err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Info("Failed to list IPXEBootConfigs for fuzzy match", "error", err.Error())
+			return
+		}
+
+		for _, cfg := range allConfigs.Items {
+			cfgSegments := normalizeAndSortUUIDSegments(cfg.Spec.SystemUUID)
+			if len(cfgSegments) != len(requestSegments) {
+				continue
+			}
+			matched := true
+			for i := range cfgSegments {
+				if cfgSegments[i] != requestSegments[i] {
+					matched = false
+					break
+				}
+			}
+			if matched {
+				ipxeBootConfigList.Items = append(ipxeBootConfigList.Items, cfg)
+				break
+			}
+		}
+	}
+
 	config := ipxeBootConfigList.Items[0]
 	if config.Spec.IPXEScriptSecretRef != nil {
 		secret := &corev1.Secret{}
@@ -136,6 +167,19 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 	})
 }
 
+// TODO: Remove later
+// Utility: normalize and sort each segment of UUID
+func normalizeAndSortUUIDSegments(uuid string) []string {
+	segments := strings.Split(strings.ToLower(uuid), "-")
+	sortedSegments := make([]string, len(segments))
+	for i, segment := range segments {
+		chars := strings.Split(segment, "")
+		sort.Strings(chars)
+		sortedSegments[i] = strings.Join(chars, "")
+	}
+	return sortedSegments
+}
+
 func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, uuid string) {
 	log.Info("Processing Ignition request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
 	ctx := r.Context()
@@ -162,6 +206,36 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			log.Info("Failed to find IPXEBootConfig", "error", err.Error())
 			return
+		}
+	}
+
+	if len(ipxeBootConfigList.Items) == 0 {
+		// Fuzzy segment-based match
+		requestSegments := normalizeAndSortUUIDSegments(uuid)
+
+		allConfigs := &bootv1alpha1.IPXEBootConfigList{}
+		if err := k8sClient.List(ctx, allConfigs); err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Info("Failed to list IPXEBootConfigs for fuzzy match", "error", err.Error())
+			return
+		}
+
+		for _, cfg := range allConfigs.Items {
+			cfgSegments := normalizeAndSortUUIDSegments(cfg.Spec.SystemUUID)
+			if len(cfgSegments) != len(requestSegments) {
+				continue
+			}
+			matched := true
+			for i := range cfgSegments {
+				if cfgSegments[i] != requestSegments[i] {
+					matched = false
+					break
+				}
+			}
+			if matched {
+				ipxeBootConfigList.Items = append(ipxeBootConfigList.Items, cfg)
+				break
+			}
 		}
 	}
 
