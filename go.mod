@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/containerd/containerd v1.7.28
-	github.com/coreos/butane v0.24.0
+	github.com/coreos/butane v0.25.0
 	github.com/go-logr/logr v1.4.3
 	github.com/ironcore-dev/controller-utils v0.10.0
 	github.com/ironcore-dev/metal v0.0.0-20240624131301-18385f342755
