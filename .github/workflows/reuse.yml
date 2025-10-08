@@ -10,4 +10,4 @@ jobs:
     - name: Check out repository
       uses: actions/checkout@v5
     - name: Run REUSE
-      uses: fsfe/reuse-action@v5
+      uses: fsfe/reuse-action@v6
