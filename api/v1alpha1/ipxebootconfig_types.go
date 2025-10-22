@@ -58,6 +58,9 @@ const (
 type IPXEBootConfigStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	State IPXEBootConfigState `json:"state,omitempty"`
+
+	// Conditions represent the latest available observations of the IPXEBootConfig's state
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true

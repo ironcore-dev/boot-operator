@@ -428,6 +428,19 @@ HTTPBootConfigState
 <td>
 </td>
 </tr>
+<tr>
+<td>
+<code>conditions</code><br/>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.31/#condition-v1-meta">
+[]Kubernetes meta/v1.Condition
+</a>
+</em>
+</td>
+<td>
+<p>Conditions represent the latest available observations of the IPXEBootConfig&rsquo;s state</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="boot.ironcore.dev/v1alpha1.IPXEBootConfigSpec">IPXEBootConfigSpec
@@ -603,6 +616,19 @@ IPXEBootConfigState
 </td>
 <td>
 <p>Important: Run &ldquo;make&rdquo; to regenerate code after modifying this file</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>conditions</code><br/>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.31/#condition-v1-meta">
+[]Kubernetes meta/v1.Condition
+</a>
+</em>
+</td>
+<td>
+<p>Conditions represent the latest available observations of the IPXEBootConfig&rsquo;s state</p>
 </td>
 </tr>
 </tbody>
