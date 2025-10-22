@@ -26,6 +26,9 @@ type HTTPBootConfigSpec struct {
 // HTTPBootConfigStatus defines the observed state of HTTPBootConfig
 type HTTPBootConfigStatus struct {
 	State HTTPBootConfigState `json:"state,omitempty"`
+
+	// Conditions represent the latest available observations of the IPXEBootConfig's state
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 type HTTPBootConfigState string

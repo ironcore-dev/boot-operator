@@ -33,6 +33,21 @@ type IPXETemplateData struct {
 	IPXEServerURL string
 }
 
+var predefinedConditions = map[string]v1.Condition{
+	"IgnitionDataFetched": {
+		Type:    "IgnitionDataFetched",
+		Status:  v1.ConditionTrue,
+		Reason:  "IgnitionDataDelivered",
+		Message: "Ignition data has been successfully delivered to the client.",
+	},
+	"IPXEScriptFetched": {
+		Type:    "IPXEScriptFetched",
+		Status:  v1.ConditionTrue,
+		Reason:  "IPXEScriptDelivered",
+		Message: "IPXE script has been successfully delivered to the client.",
+	},
+}
+
 func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultUKIURL string) {
 	http.HandleFunc("/ipxe/", func(w http.ResponseWriter, r *http.Request) {
 		handleIPXE(w, r, k8sClient, log, ipxeServiceURL)
@@ -134,6 +149,13 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 		SquashfsURL:   config.Spec.SquashfsURL,
 		IPXEServerURL: ipxeServiceURL,
 	})
+
+	go func() {
+		err = SetStatusCondition(ctx, k8sClient, log, &config, "IPXEScriptFetched")
+		if err != nil {
+			log.Info("Failed to set IPXEScriptFetched status condition", "error", err)
+		}
+	}()
 }
 
 func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, uuid string) {
@@ -142,7 +164,7 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 
 	ipxeBootConfigList := &bootv1alpha1.IPXEBootConfigList{}
 	if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid}); err != nil {
-		http.Error(w, "Resource Not Found", http.StatusNotFound)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Info("Failed to find IPXEBootConfig", "error", err.Error())
 		return
 	}
@@ -206,6 +228,13 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+
+	go func() {
+		err = SetStatusCondition(ctx, k8sClient, log, &ipxeBootConfig, "IgnitionDataFetched")
+		if err != nil {
+			log.Info("Failed to set IgnitionDataFetched status condition", "error", err)
+		}
+	}()
 }
 
 func serveDefaultIPXETemplate(w http.ResponseWriter, log logr.Logger, data IPXETemplateData) {
@@ -308,6 +337,13 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
+
+	go func() {
+		err = SetStatusCondition(ctx, k8sClient, log, &httpBootConfig, "IgnitionDataFetched")
+		if err != nil {
+			log.Info("Failed to set IgnitionDataFetched status condition", "error", err)
+		}
+	}()
 }
 
 func fetchIgnitionData(ctx context.Context, k8sClient client.Client, ignitionSecret corev1.Secret) ([]byte, string, error) {
@@ -411,4 +447,42 @@ func handleHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Cli
 		log.Error(err, "Failed to write response")
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
+}
+
+func SetStatusCondition(ctx context.Context, k8sClient client.Client, log logr.Logger, obj client.Object, conditionType string) error {
+	condition, exists := predefinedConditions[conditionType]
+	if !exists {
+		log.Error(fmt.Errorf("condition type not found"), "Invalid condition type", "conditionType", conditionType)
+		return fmt.Errorf("condition type %s not found", conditionType)
+	}
+
+	switch resource := obj.(type) {
+	case *bootv1alpha1.IPXEBootConfig:
+		resource.Status.Conditions = updateCondition(resource.Status.Conditions, condition)
+		if err := k8sClient.Status().Patch(ctx, resource, client.MergeFrom(resource.DeepCopy())); err != nil {
+			log.Error(err, "Failed to set the condition in the IPXEBootConfig status")
+			return err
+		}
+	case *bootv1alpha1.HTTPBootConfig:
+		resource.Status.Conditions = updateCondition(resource.Status.Conditions, condition)
+		if err := k8sClient.Status().Patch(ctx, resource, client.MergeFrom(resource.DeepCopy())); err != nil {
+			log.Error(err, "Failed to set the condition in the HTTPBootConfig status")
+			return err
+		}
+	default:
+		log.Error(fmt.Errorf("unsupported resource type"), "Failed to set the condition")
+		return fmt.Errorf("unsupported resource type")
+	}
+
+	return nil
+}
+
+func updateCondition(conditions []v1.Condition, newCondition v1.Condition) []v1.Condition {
+	for i, condition := range conditions {
+		if condition.Type == newCondition.Type {
+			conditions[i] = newCondition
+			return conditions
+		}
+	}
+	return append(conditions, newCondition)
 }
