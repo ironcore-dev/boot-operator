@@ -9,7 +9,5 @@ const (
 	SystemUUIDIndexKey   = "spec.systemUUID" // Field to index resources by their system UUID.
 	SystemIPIndexKey     = "spec.systemIPs"  // Field to index resources by their system IP addresses.
 	DefaultFormatKey     = "format"          // Key for determining the format of the data stored in a Secret, such as fcos or plain-ignition.
-	IgnitionV2Format     = "ignitionv2"      // Specifies the format value corresponding to Ignition config version 2.
-	IgnitionV3Format     = "ignitionv3"      // Specifies the format value corresponding to Ignition config version 3.
 	FCOSFormat           = "fcos"            // Specifies the format value used for Fedora CoreOS specific configurations.
 )
