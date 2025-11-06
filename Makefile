@@ -192,6 +192,7 @@ ADDLICENSE ?= $(LOCALBIN)/addlicense
 GOIMPORTS ?= $(LOCALBIN)/goimports
 GEN_CRD_API_REFERENCE_DOCS ?= $(LOCALBIN)/gen-crd-api-reference-docs
 KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
+SETUP_ENVTEST_VERSION ?= v0.17.1   # example pre-0.22
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.5.0

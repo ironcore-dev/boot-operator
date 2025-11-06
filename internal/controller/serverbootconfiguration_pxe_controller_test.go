@@ -152,4 +152,78 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 			HaveField("Spec.IgnitionSecretRef.Name", "foo"),
 		))
 	})
+
+	It("should mirror IPXEScriptFetched condition onto ServerBootConfiguration", func(ctx SpecContext) {
+		By("creating a new Server object")
+		server := &metalv1alpha1.Server{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "server-",
+			},
+			Spec: metalv1alpha1.ServerSpec{
+				UUID: "12345",
+			},
+		}
+		Expect(k8sClient.Create(ctx, server)).To(Succeed())
+
+		By("patching the Server NICs in Server status")
+		Eventually(UpdateStatus(server, func() {
+			server.Status.NetworkInterfaces = []metalv1alpha1.NetworkInterface{
+				{
+					Name:       "foo",
+					IP:         metalv1alpha1.MustParseIP("1.1.1.1"),
+					MACAddress: "abcd",
+				},
+			}
+		})).Should(Succeed())
+
+		By("creating a new ServerBootConfiguration")
+		cfg := &metalv1alpha1.ServerBootConfiguration{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:    ns.Name,
+				GenerateName: "test-",
+			},
+			Spec: metalv1alpha1.ServerBootConfigurationSpec{
+				ServerRef: corev1.LocalObjectReference{
+					Name: server.Name,
+				},
+				Image:             "ghcr.io/ironcore-dev/os-images/gardenlinux:1877.0",
+				IgnitionSecretRef: &corev1.LocalObjectReference{Name: "foo"},
+			},
+		}
+		Expect(k8sClient.Create(ctx, cfg)).To(Succeed())
+
+		By("waiting for the IPXEBootConfig to be created")
+		ipxe := &v1alpha1.IPXEBootConfig{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: ns.Name,
+				Name:      cfg.Name,
+			},
+		}
+		Eventually(Object(ipxe)).Should(Succeed())
+
+		By("setting IPXEScriptFetched=True on the IPXEBootConfig status")
+		Eventually(UpdateStatus(ipxe, func() {
+			ipxe.Status.State = v1alpha1.IPXEBootConfigStateReady
+			ipxe.Status.Conditions = []metav1.Condition{
+				{
+					Type:    "IPXEScriptFetched",
+					Status:  metav1.ConditionTrue,
+					Reason:  "ScriptDelivered",
+					Message: "iPXE script has been successfully delivered to the client.",
+				},
+			}
+		})).Should(Succeed())
+
+		By("verifying the condition appears on the ServerBootConfiguration status")
+		Eventually(Object(cfg)).Should(SatisfyAll(
+			WithTransform(func(c *metalv1alpha1.ServerBootConfiguration) bool {
+				for _, cond := range c.Status.Conditions {
+					if cond.Type == "IPXEScriptFetched" && cond.Status == metav1.ConditionTrue {
+						return true
+					}
+				}
+				return false
+			}, BeTrue()),
+		))
+	})
 })
