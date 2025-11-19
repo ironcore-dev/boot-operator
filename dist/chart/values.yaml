@@ -45,6 +45,10 @@ controllerManager:
     - key: node-role.kubernetes.io/control-plane
       effect: NoSchedule
 
+service:
+  enable: false
+  port: 8082
+
 # [RBAC]: To enable RBAC (Permissions) configurations
 rbac:
   enable: true
