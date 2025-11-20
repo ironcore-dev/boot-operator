@@ -1,0 +1,18 @@
+{{- if .Values.service.enable }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: boot-http
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+spec:
+  ports:
+  - name: boot
+    port: {{ .Values.service.port }}
+    protocol: TCP
+    targetPort: {{ .Values.service.port }}
+  selector:
+    app.kubernetes.io/instance: boot-operator
+  type: ClusterIP
+{{- end }}
