@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+
 	"github.com/containerd/containerd/remotes/docker"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
@@ -133,24 +135,26 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 	return ctrl.Result{}, nil
 }
 
-func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ctx context.Context, httpBootConfig *bootv1alpha1.HTTPBootConfig, config *metalv1alpha1.ServerBootConfiguration) error {
-	if httpBootConfig.Status.State == bootv1alpha1.HTTPBootConfigStateReady {
-		return r.patchState(ctx, config, metalv1alpha1.ServerBootConfigurationStateReady)
-	}
-
-	if httpBootConfig.Status.State == bootv1alpha1.HTTPBootConfigStateError {
-		return r.patchState(ctx, config, metalv1alpha1.ServerBootConfigurationStateError)
-	}
-	return nil
-}
-
-func (r *ServerBootConfigurationHTTPReconciler) patchState(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration, state metalv1alpha1.ServerBootConfigurationState) error {
-	configBase := config.DeepCopy()
-	config.Status.State = state
-	if err := r.Status().Patch(ctx, config, client.MergeFrom(configBase)); err != nil {
+func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ctx context.Context, httpBootConfig *bootv1alpha1.HTTPBootConfig, cfg *metalv1alpha1.ServerBootConfiguration) error {
+	key := types.NamespacedName{Name: cfg.Name, Namespace: cfg.Namespace}
+	var cur metalv1alpha1.ServerBootConfiguration
+	if err := r.Get(ctx, key, &cur); err != nil {
 		return err
 	}
-	return nil
+	base := cur.DeepCopy()
+
+	switch httpBootConfig.Status.State {
+	case bootv1alpha1.HTTPBootConfigStateReady:
+		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
+	case bootv1alpha1.HTTPBootConfigStateError:
+		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateError
+	}
+
+	for _, c := range httpBootConfig.Status.Conditions {
+		apimeta.SetStatusCondition(&cur.Status.Conditions, c)
+	}
+
+	return r.Status().Patch(ctx, &cur, client.MergeFrom(base))
 }
 
 // getSystemUUIDFromServer fetches the UUID from the referenced Server object.

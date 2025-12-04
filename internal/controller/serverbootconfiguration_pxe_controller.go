@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -159,15 +160,26 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 	return ctrl.Result{}, nil
 }
 
-func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx context.Context, ipxeConfig *v1alpha1.IPXEBootConfig, config *metalv1alpha1.ServerBootConfiguration) error {
-	if ipxeConfig.Status.State == v1alpha1.IPXEBootConfigStateReady {
-		return r.patchState(ctx, config, metalv1alpha1.ServerBootConfigurationStateReady)
+func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx context.Context, ipxeConfig *v1alpha1.IPXEBootConfig, cfg *metalv1alpha1.ServerBootConfiguration) error {
+	key := types.NamespacedName{Name: cfg.Name, Namespace: cfg.Namespace}
+	var cur metalv1alpha1.ServerBootConfiguration
+	if err := r.Get(ctx, key, &cur); err != nil {
+		return err
+	}
+	base := cur.DeepCopy()
+
+	switch ipxeConfig.Status.State {
+	case v1alpha1.IPXEBootConfigStateReady:
+		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
+	case v1alpha1.IPXEBootConfigStateError:
+		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateError
 	}
 
-	if ipxeConfig.Status.State == v1alpha1.IPXEBootConfigStateError {
-		return r.patchState(ctx, config, metalv1alpha1.ServerBootConfigurationStateError)
+	for _, c := range ipxeConfig.Status.Conditions {
+		apimeta.SetStatusCondition(&cur.Status.Conditions, c)
 	}
-	return nil
+
+	return r.Status().Patch(ctx, &cur, client.MergeFrom(base))
 }
 
 func (r *ServerBootConfigurationPXEReconciler) patchState(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration, state metalv1alpha1.ServerBootConfigurationState) error {
