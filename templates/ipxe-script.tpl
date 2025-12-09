@@ -1,4 +1,4 @@
-§#!ipxe
+#!ipxe
 
 set ipxe-svc {{.IPXEServerURL}}
 set kernel-url {{.KernelURL}}
