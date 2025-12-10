@@ -297,8 +297,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := IndexHTTPBootConfigBySystemIPs(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to set up indexer for HTTPBootConfig SystemIP")
+	if err := IndexHTTPBootConfigByNetworkIDs(ctx, mgr); err != nil {
+		setupLog.Error(err, "unable to set up indexer for HTTPBootConfig NetworkIdentifiers")
 		os.Exit(1)
 	}
 
@@ -350,14 +350,14 @@ func IndexHTTPBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) erro
 	)
 }
 
-func IndexHTTPBootConfigBySystemIPs(ctx context.Context, mgr ctrl.Manager) error {
+func IndexHTTPBootConfigByNetworkIDs(ctx context.Context, mgr ctrl.Manager) error {
 	return mgr.GetFieldIndexer().IndexField(
 		ctx,
 		&bootv1alpha1.HTTPBootConfig{},
 		bootv1alpha1.SystemIPIndexKey,
 		func(Obj client.Object) []string {
 			HTTPBootConfig := Obj.(*bootv1alpha1.HTTPBootConfig)
-			return HTTPBootConfig.Spec.SystemIPs
+			return HTTPBootConfig.Spec.NetworkIdentifiers
 		},
 	)
 }

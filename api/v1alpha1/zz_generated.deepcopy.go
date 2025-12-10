@@ -80,8 +80,8 @@ func (in *HTTPBootConfigSpec) DeepCopyInto(out *HTTPBootConfigSpec) {
 		*out = new(v1.LocalObjectReference)
 		**out = **in
 	}
-	if in.SystemIPs != nil {
-		in, out := &in.SystemIPs, &out.SystemIPs
+	if in.NetworkIdentifiers != nil {
+		in, out := &in.NetworkIdentifiers, &out.NetworkIdentifiers
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}

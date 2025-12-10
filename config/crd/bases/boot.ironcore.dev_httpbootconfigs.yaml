@@ -61,8 +61,9 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              systemIPs:
-                description: SystemIPs is a list of IP addresses assigned to the server.
+              networkIdentifiers:
+                description: NetworkIdentifiers is a list of IP addresses and MAC
+                  Addresses assigned to the server.
                 items:
                   type: string
                 type: array

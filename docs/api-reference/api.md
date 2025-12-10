@@ -97,13 +97,13 @@ Kubernetes core/v1.LocalObjectReference
 </tr>
 <tr>
 <td>
-<code>systemIPs</code><br/>
+<code>networkIdentifiers</code><br/>
 <em>
 []string
 </em>
 </td>
 <td>
-<p>SystemIPs is a list of IP addresses assigned to the server.</p>
+<p>NetworkIdentifiers is a list of IP addresses and MAC Addresses assigned to the server.</p>
 </td>
 </tr>
 <tr>
@@ -353,13 +353,13 @@ Kubernetes core/v1.LocalObjectReference
 </tr>
 <tr>
 <td>
-<code>systemIPs</code><br/>
+<code>networkIdentifiers</code><br/>
 <em>
 []string
 </em>
 </td>
 <td>
-<p>SystemIPs is a list of IP addresses assigned to the server.</p>
+<p>NetworkIdentifiers is a list of IP addresses and MAC Addresses assigned to the server.</p>
 </td>
 </tr>
 <tr>
