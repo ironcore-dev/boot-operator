@@ -80,11 +80,11 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 	}
 	log.V(1).Info("Got system UUID from Server", "systemUUID", systemUUID)
 
-	systemIPs, err := r.getSystemIPFromServer(ctx, config)
+	networkIdentifiers, err := r.getSystemNetworkIDsFromServer(ctx, config)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get system IPs from Server: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to get Network Identifiers from Server: %w", err)
 	}
-	log.V(1).Info("Got system IPs from Server", "systemIPs", systemIPs)
+	log.V(1).Info("Got Network Identifiers from Server", "networkIdentifiers", networkIdentifiers)
 
 	ukiURL, err := r.constructUKIURL(ctx, config.Spec.Image)
 	if err != nil {
@@ -102,9 +102,9 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 			Name:      config.Name,
 		},
 		Spec: bootv1alpha1.HTTPBootConfigSpec{
-			SystemUUID: systemUUID,
-			SystemIPs:  systemIPs,
-			UKIURL:     ukiURL,
+			SystemUUID:         systemUUID,
+			NetworkIdentifiers: networkIdentifiers,
+			UKIURL:             ukiURL,
 		},
 	}
 	if config.Spec.IgnitionSecretRef != nil {
@@ -166,20 +166,20 @@ func (r *ServerBootConfigurationHTTPReconciler) getSystemUUIDFromServer(ctx cont
 	return server.Spec.UUID, nil
 }
 
-// getSystemIPFromServer fetches the IPs from the network interfaces of the referenced Server object.
-func (r *ServerBootConfigurationHTTPReconciler) getSystemIPFromServer(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) ([]string, error) {
+// getSystemNetworkIDsFromServer fetches the IPs from the network interfaces of the referenced Server object.
+func (r *ServerBootConfigurationHTTPReconciler) getSystemNetworkIDsFromServer(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) ([]string, error) {
 	server := &metalv1alpha1.Server{}
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
 		return nil, fmt.Errorf("failed to get Server: %w", err)
 	}
 
-	systemIPs := make([]string, 0, 2*len(server.Status.NetworkInterfaces))
+	nIDs := make([]string, 0, 2*len(server.Status.NetworkInterfaces))
 
 	for _, nic := range server.Status.NetworkInterfaces {
-		systemIPs = append(systemIPs, nic.IP.String())
-		systemIPs = append(systemIPs, nic.MACAddress)
+		nIDs = append(nIDs, nic.IP.String())
+		nIDs = append(nIDs, nic.MACAddress)
 	}
-	return systemIPs, nil
+	return nIDs, nil
 }
 
 func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(ctx context.Context, image string) (string, error) {

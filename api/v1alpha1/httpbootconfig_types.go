@@ -16,8 +16,8 @@ type HTTPBootConfigSpec struct {
 	// IgnitionSecretRef is a reference to the secret containing Ignition configuration.
 	IgnitionSecretRef *corev1.LocalObjectReference `json:"ignitionSecretRef,omitempty"`
 
-	// SystemIPs is a list of IP addresses assigned to the server.
-	SystemIPs []string `json:"systemIPs,omitempty"`
+	// NetworkIdentifiers is a list of IP addresses and MAC Addresses assigned to the server.
+	NetworkIdentifiers []string `json:"networkIdentifiers,omitempty"`
 
 	// UKIURL is the URL where the UKI (Unified Kernel Image) is hosted.
 	UKIURL string `json:"ukiURL,omitempty"`

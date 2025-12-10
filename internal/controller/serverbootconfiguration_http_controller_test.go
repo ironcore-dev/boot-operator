@@ -49,7 +49,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 			server.Status.NetworkInterfaces = []metalv1alpha1.NetworkInterface{
 				{
 					Name:       "foo",
-					IP:         metalv1alpha1.MustParseIP("1.1.1.1"),
+					IP:         ptr.To(metalv1alpha1.MustParseIP("1.1.1.1")),
 					MACAddress: "abcd",
 				},
 			}
@@ -88,7 +88,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 				BlockOwnerDeletion: ptr.To(true),
 			})),
 			HaveField("Spec.SystemUUID", server.Spec.UUID),
-			HaveField("Spec.SystemIPs", ContainElement("1.1.1.1")),
+			HaveField("Spec.NetworkIdentifiers", ContainElement("1.1.1.1")),
 			HaveField("Spec.IgnitionSecretRef.Name", "foo"),
 		))
 	})
