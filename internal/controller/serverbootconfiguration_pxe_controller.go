@@ -197,7 +197,7 @@ func (r *ServerBootConfigurationPXEReconciler) getSystemUUIDFromBootConfig(ctx c
 		return "", fmt.Errorf("failed to get Server: %w", err)
 	}
 
-	return server.Spec.UUID, nil
+	return server.Spec.SystemUUID, nil
 }
 
 func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) ([]string, error) {
