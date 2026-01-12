@@ -18,6 +18,8 @@ const Name string = "bootctl"
 
 var scheme = runtime.NewScheme()
 
+// init registers the Kubernetes client-go, API extensions, boot-operator, and metal-operator
+// API schemes into the package runtime scheme. It will panic if any scheme registration fails.
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(apiextensionsv1.AddToScheme(scheme))
