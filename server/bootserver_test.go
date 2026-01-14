@@ -102,7 +102,7 @@ systemd:
 					Namespace: "default",
 				},
 			}
-			_ = k8sClient.Create(context.Background(), secret)
+			Expect(k8sClient.Create(context.Background(), secret)).To(Succeed())
 
 			err := SetStatusCondition(
 				context.Background(),
