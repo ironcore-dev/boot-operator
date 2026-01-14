@@ -117,7 +117,7 @@ func (r *HTTPBootConfigReconciler) enqueueHTTPBootConfigReferencingIgnitionSecre
 	}
 
 	configList := &bootv1alpha1.HTTPBootConfigList{}
-	if err := r.List(ctx, configList, client.InNamespace("")); err != nil {
+	if err := r.List(ctx, configList, client.InNamespace(secretObj.Namespace)); err != nil {
 		log.Error(err, "failed to list HTTPBootConfig for Secret", "Secret", client.ObjectKeyFromObject(secretObj))
 		return nil
 	}
@@ -125,8 +125,7 @@ func (r *HTTPBootConfigReconciler) enqueueHTTPBootConfigReferencingIgnitionSecre
 	var requests []reconcile.Request
 	for _, config := range configList.Items {
 		if config.Spec.IgnitionSecretRef != nil &&
-			config.Spec.IgnitionSecretRef.Name == secretObj.Name &&
-			config.Namespace == secretObj.Namespace {
+			config.Spec.IgnitionSecretRef.Name == secretObj.Name {
 			requests = append(requests, reconcile.Request{
 				NamespacedName: types.NamespacedName{
 					Name:      config.Name,
