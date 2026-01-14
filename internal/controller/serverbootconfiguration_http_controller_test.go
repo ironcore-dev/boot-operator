@@ -49,7 +49,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 			server.Status.NetworkInterfaces = []metalv1alpha1.NetworkInterface{
 				{
 					Name:       "foo",
-					IP:         ptr.To(metalv1alpha1.MustParseIP("1.1.1.1")),
+					IPs:        []metalv1alpha1.IP{metalv1alpha1.MustParseIP("1.1.1.1")},
 					MACAddress: "abcd",
 				},
 			}

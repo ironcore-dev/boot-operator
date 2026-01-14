@@ -174,7 +174,13 @@ func (r *ServerBootConfigurationHTTPReconciler) getSystemNetworkIDsFromServer(ct
 	nIDs := make([]string, 0, 2*len(server.Status.NetworkInterfaces))
 
 	for _, nic := range server.Status.NetworkInterfaces {
-		nIDs = append(nIDs, nic.IP.String())
+		if len(nic.IPs) > 0 {
+			for _, ip := range nic.IPs {
+				nIDs = append(nIDs, ip.String())
+			}
+		} else if nic.IP != nil && !nic.IP.IsZero() {
+			nIDs = append(nIDs, nic.IP.String())
+		}
 		nIDs = append(nIDs, nic.MACAddress)
 	}
 	return nIDs, nil
