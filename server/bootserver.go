@@ -393,7 +393,7 @@ func handleHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Cli
 
 	var httpBootConfigs bootv1alpha1.HTTPBootConfigList
 	for _, ip := range clientIPs {
-		if err := k8sClient.List(ctx, &httpBootConfigs, client.MatchingFields{bootv1alpha1.SystemIPIndexKey: ip}); err != nil {
+		if err := k8sClient.List(ctx, &httpBootConfigs, client.MatchingFields{bootv1alpha1.NetworkIdentifierIndexKey: ip}); err != nil {
 			log.Info("Failed to list HTTPBootConfig for IP", "IP", ip, "error", err)
 			continue
 		}
