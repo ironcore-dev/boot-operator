@@ -17,7 +17,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/go-logr/logr"
@@ -131,7 +130,6 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 	log.V(1).Info("Patched server boot config state")
 
 	log.V(1).Info("Reconciled ServerBootConfiguration")
-
 	return ctrl.Result{}, nil
 }
 
@@ -253,6 +251,34 @@ func (r *ServerBootConfigurationHTTPReconciler) getUKIDigestFromNestedManifest(c
 	return "", fmt.Errorf("UKI layer digest not found")
 }
 
+func (r *ServerBootConfigurationHTTPReconciler) enqueueServerBootConfigReferencingIgnitionSecret(ctx context.Context, secret client.Object) []reconcile.Request {
+	log := ctrl.LoggerFrom(ctx)
+	secretObj, ok := secret.(*corev1.Secret)
+	if !ok {
+		log.Error(nil, "can't decode object into Secret", secret)
+		return nil
+	}
+
+	bootConfigList := &metalv1alpha1.ServerBootConfigurationList{}
+	if err := r.List(ctx, bootConfigList, client.InNamespace(secretObj.Namespace)); err != nil {
+		log.Error(err, "failed to list ServerBootConfiguration for secret", secret)
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, bootConfig := range bootConfigList.Items {
+		if bootConfig.Spec.IgnitionSecretRef != nil && bootConfig.Spec.IgnitionSecretRef.Name == secretObj.Name {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      bootConfig.Name,
+					Namespace: bootConfig.Namespace,
+				},
+			})
+		}
+	}
+	return requests
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ServerBootConfigurationHTTPReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -263,32 +289,4 @@ func (r *ServerBootConfigurationHTTPReconciler) SetupWithManager(mgr ctrl.Manage
 			handler.EnqueueRequestsFromMapFunc(r.enqueueServerBootConfigReferencingIgnitionSecret),
 		).
 		Complete(r)
-}
-
-func (r *ServerBootConfigurationHTTPReconciler) enqueueServerBootConfigReferencingIgnitionSecret(ctx context.Context, secret client.Object) []reconcile.Request {
-	log := log.Log.WithValues("secret", secret.GetName())
-	secretObj, ok := secret.(*corev1.Secret)
-	if !ok {
-		log.Error(nil, "can't decode object into Secret", secret)
-		return nil
-	}
-
-	list := &metalv1alpha1.ServerBootConfigurationList{}
-	if err := r.List(ctx, list, client.InNamespace(secretObj.Namespace)); err != nil {
-		log.Error(err, "failed to list ServerBootConfiguration for secret", secret)
-		return nil
-	}
-
-	var requests []reconcile.Request
-	for _, serverBootConfig := range list.Items {
-		if serverBootConfig.Spec.IgnitionSecretRef != nil && serverBootConfig.Spec.IgnitionSecretRef.Name == secretObj.Name {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      serverBootConfig.Name,
-					Namespace: serverBootConfig.Namespace,
-				},
-			})
-		}
-	}
-	return requests
 }

@@ -26,7 +26,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/ironcore-dev/boot-operator/api/v1alpha1"
@@ -45,13 +44,6 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-type ServerBootConfigurationPXEReconciler struct {
-	client.Client
-	Scheme         *runtime.Scheme
-	IPXEServiceURL string
-	Architecture   string
-}
-
 const (
 	MediaTypeKernel      = "application/vnd.ironcore.image.kernel"
 	MediaTypeInitrd      = "application/vnd.ironcore.image.initramfs"
@@ -61,6 +53,13 @@ const (
 	MediaTypeSquashFSOld = "application/io.gardenlinux.squashfs"
 	CNAMEPrefixMetalPXE  = "metal_pxe"
 )
+
+type ServerBootConfigurationPXEReconciler struct {
+	client.Client
+	Scheme         *runtime.Scheme
+	IPXEServiceURL string
+	Architecture   string
+}
 
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverbootconfigurations,verbs=get;list;watch
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverbootconfigurations/status,verbs=get;update;patch
@@ -92,38 +91,38 @@ func (r *ServerBootConfigurationPXEReconciler) delete(_ context.Context, _ logr.
 	return ctrl.Result{}, nil
 }
 
-func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, log logr.Logger, config *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
+func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, log logr.Logger, bootConfig *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
 	log.V(1).Info("Reconciling ServerBootConfiguration")
 
-	systemUUID, err := r.getSystemUUIDFromBootConfig(ctx, config)
+	systemUUID, err := r.getSystemUUIDFromBootConfig(ctx, bootConfig)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get system UUID from BootConfig: %w", err)
 	}
 	log.V(1).Info("Got system UUID from BootConfig", "systemUUID", systemUUID)
 
-	systemIPs, err := r.getSystemIPFromBootConfig(ctx, config)
+	systemIPs, err := r.getSystemIPFromBootConfig(ctx, bootConfig)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get system IP from BootConfig: %w", err)
 	}
 	log.V(1).Info("Got system IP from BootConfig", "systemIPs", systemIPs)
 
-	kernelURL, initrdURL, squashFSURL, err := r.getImageDetailsFromConfig(ctx, config)
+	kernelURL, initrdURL, squashFSURL, err := r.getImageDetailsFromConfig(ctx, bootConfig)
 	if err != nil {
-		if err := r.patchState(ctx, config, metalv1alpha1.ServerBootConfigurationStateError); err != nil {
+		if err := r.patchState(ctx, bootConfig, metalv1alpha1.ServerBootConfigurationStateError); err != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to patch server boot config state to %s: %w", metalv1alpha1.ServerBootConfigurationStateError, err)
 		}
 		return ctrl.Result{}, fmt.Errorf("failed to get image details from BootConfig: %w", err)
 	}
 	log.V(1).Info("Extracted OS image layer details")
 
-	ipxeConfig := &v1alpha1.IPXEBootConfig{
+	config := &v1alpha1.IPXEBootConfig{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "boot.ironcore.dev/v1alpha1",
 			Kind:       "IPXEBootConfig",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: config.Namespace,
-			Name:      config.Name,
+			Namespace: bootConfig.Namespace,
+			Name:      bootConfig.Name,
 		},
 		Spec: v1alpha1.IPXEBootConfigSpec{
 			SystemUUID:  systemUUID,
@@ -133,26 +132,26 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 			SquashfsURL: squashFSURL,
 		},
 	}
-	if config.Spec.IgnitionSecretRef != nil {
-		ipxeConfig.Spec.IgnitionSecretRef = config.Spec.IgnitionSecretRef
+	if bootConfig.Spec.IgnitionSecretRef != nil {
+		config.Spec.IgnitionSecretRef = bootConfig.Spec.IgnitionSecretRef
 	}
 
-	if err := controllerutil.SetControllerReference(config, ipxeConfig, r.Scheme); err != nil {
+	if err := controllerutil.SetControllerReference(bootConfig, config, r.Scheme); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to set controller reference: %w", err)
 	}
 	log.V(1).Info("Set controller reference")
 
-	if err := r.Patch(ctx, ipxeConfig, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
+	if err := r.Patch(ctx, config, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to apply IPXE config: %w", err)
 	}
 	log.V(1).Info("Applied IPXE config for server boot config")
 
-	if err := r.Get(ctx, client.ObjectKey{Namespace: config.Namespace, Name: config.Name}, ipxeConfig); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: bootConfig.Namespace, Name: bootConfig.Name}, config); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to get IPXE config: %w", err)
 	}
 
-	if err := r.patchConfigStateFromIPXEState(ctx, ipxeConfig, config); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to patch server boot config state to %s: %w", ipxeConfig.Status.State, err)
+	if err := r.patchConfigStateFromIPXEState(ctx, config, bootConfig); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to patch server boot config state to %s: %w", config.Status.State, err)
 	}
 	log.V(1).Info("Patched server boot config state")
 
@@ -160,26 +159,21 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 	return ctrl.Result{}, nil
 }
 
-func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx context.Context, ipxeConfig *v1alpha1.IPXEBootConfig, cfg *metalv1alpha1.ServerBootConfiguration) error {
-	key := types.NamespacedName{Name: cfg.Name, Namespace: cfg.Namespace}
-	var cur metalv1alpha1.ServerBootConfiguration
-	if err := r.Get(ctx, key, &cur); err != nil {
-		return err
-	}
-	base := cur.DeepCopy()
+func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx context.Context, config *v1alpha1.IPXEBootConfig, bootConfig *metalv1alpha1.ServerBootConfiguration) error {
+	bootConfigBase := bootConfig.DeepCopy()
 
-	switch ipxeConfig.Status.State {
+	switch config.Status.State {
 	case v1alpha1.IPXEBootConfigStateReady:
-		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
+		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
 	case v1alpha1.IPXEBootConfigStateError:
-		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateError
+		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStateError
 	}
 
-	for _, c := range ipxeConfig.Status.Conditions {
-		apimeta.SetStatusCondition(&cur.Status.Conditions, c)
+	for _, c := range config.Status.Conditions {
+		apimeta.SetStatusCondition(&bootConfig.Status.Conditions, c)
 	}
 
-	return r.Status().Patch(ctx, &cur, client.MergeFrom(base))
+	return r.Status().Patch(ctx, bootConfig, client.MergeFrom(bootConfigBase))
 }
 
 func (r *ServerBootConfigurationPXEReconciler) patchState(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration, state metalv1alpha1.ServerBootConfigurationState) error {
@@ -194,7 +188,7 @@ func (r *ServerBootConfigurationPXEReconciler) patchState(ctx context.Context, c
 func (r *ServerBootConfigurationPXEReconciler) getSystemUUIDFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {
 	server := &metalv1alpha1.Server{}
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
-		return "", fmt.Errorf("failed to get Server: %w", err)
+		return "", err
 	}
 
 	return server.Spec.SystemUUID, nil
@@ -203,10 +197,10 @@ func (r *ServerBootConfigurationPXEReconciler) getSystemUUIDFromBootConfig(ctx c
 func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) ([]string, error) {
 	server := &metalv1alpha1.Server{}
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
-		return nil, fmt.Errorf("failed to get Server: %w", err)
+		return nil, err
 	}
 
-	systemIPs := []string{}
+	systemIPs := make([]string, 0, len(server.Status.NetworkInterfaces))
 	for _, nic := range server.Status.NetworkInterfaces {
 		systemIPs = append(systemIPs, nic.IP.String())
 	}
@@ -350,6 +344,34 @@ func fetchContent(ctx context.Context, resolver remotes.Resolver, ref string, de
 	return data, nil
 }
 
+func (r *ServerBootConfigurationPXEReconciler) enqueueServerBootConfigFromIgnitionSecret(ctx context.Context, secret client.Object) []reconcile.Request {
+	log := ctrl.LoggerFrom(ctx)
+	secretObj, ok := secret.(*corev1.Secret)
+	if !ok {
+		log.Error(nil, "can't decode object into Secret", secret)
+		return nil
+	}
+
+	bootConfigList := &metalv1alpha1.ServerBootConfigurationList{}
+	if err := r.List(ctx, bootConfigList, client.InNamespace(secretObj.Namespace)); err != nil {
+		log.Error(err, "failed to list ServerBootConfiguration for Secret", "Secret", client.ObjectKeyFromObject(secretObj))
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, bootConfig := range bootConfigList.Items {
+		if bootConfig.Spec.IgnitionSecretRef != nil && bootConfig.Spec.IgnitionSecretRef.Name == secretObj.Name {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: types.NamespacedName{
+					Name:      bootConfig.Name,
+					Namespace: bootConfig.Namespace,
+				},
+			})
+		}
+	}
+	return requests
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ServerBootConfigurationPXEReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -357,35 +379,7 @@ func (r *ServerBootConfigurationPXEReconciler) SetupWithManager(mgr ctrl.Manager
 		Owns(&v1alpha1.IPXEBootConfig{}).
 		Watches(
 			&corev1.Secret{},
-			handler.EnqueueRequestsFromMapFunc(r.enqueueServerBootConfigReferencingIgnitionSecret),
+			handler.EnqueueRequestsFromMapFunc(r.enqueueServerBootConfigFromIgnitionSecret),
 		).
 		Complete(r)
-}
-
-func (r *ServerBootConfigurationPXEReconciler) enqueueServerBootConfigReferencingIgnitionSecret(ctx context.Context, secret client.Object) []reconcile.Request {
-	log := log.Log.WithValues("secret", secret.GetName())
-	secretObj, ok := secret.(*corev1.Secret)
-	if !ok {
-		log.Error(nil, "can't decode object into Secret", secret)
-		return nil
-	}
-
-	list := &metalv1alpha1.ServerBootConfigurationList{}
-	if err := r.List(ctx, list, client.InNamespace(secretObj.Namespace)); err != nil {
-		log.Error(err, "failed to list ServerBootConfiguration for secret", secret)
-		return nil
-	}
-
-	var requests []reconcile.Request
-	for _, serverBootConfig := range list.Items {
-		if serverBootConfig.Spec.IgnitionSecretRef != nil && serverBootConfig.Spec.IgnitionSecretRef.Name == secretObj.Name {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      serverBootConfig.Name,
-					Namespace: serverBootConfig.Namespace,
-				},
-			})
-		}
-	}
-	return requests
 }
