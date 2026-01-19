@@ -202,7 +202,15 @@ func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx con
 
 	systemIPs := make([]string, 0, len(server.Status.NetworkInterfaces))
 	for _, nic := range server.Status.NetworkInterfaces {
-		systemIPs = append(systemIPs, nic.IP.String())
+		if len(nic.IPs) > 0 {
+			for _, ip := range nic.IPs {
+				systemIPs = append(systemIPs, ip.String())
+			}
+			continue
+		}
+		if nic.IP != nil && !nic.IP.IsZero() {
+			systemIPs = append(systemIPs, nic.IP.String())
+		}
 	}
 
 	return systemIPs, nil
