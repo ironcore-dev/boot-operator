@@ -4,6 +4,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,7 +14,9 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 
+	iso9660 "github.com/kdomanski/iso9660"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -23,6 +26,7 @@ import (
 	butanecommon "github.com/coreos/butane/config/common"
 	"github.com/go-logr/logr"
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 )
 
 type IPXETemplateData struct {
@@ -48,7 +52,12 @@ var predefinedConditions = map[string]v1.Condition{
 	},
 }
 
+var configDriveCache *ConfigDriveCache
+
 func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultUKIURL string) {
+	// Initialize config drive cache with 10 minute TTL and 100MB max size
+	configDriveCache = NewConfigDriveCache(10*time.Minute, 100*1024*1024)
+
 	http.HandleFunc("/ipxe/", func(w http.ResponseWriter, r *http.Request) {
 		handleIPXE(w, r, k8sClient, log, ipxeServiceURL)
 	})
@@ -85,6 +94,10 @@ func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient clien
 		} else {
 			handleIgnitionIPXEBoot(w, r, k8sClient, log, uuid)
 		}
+	})
+
+	http.HandleFunc("/config-drive/", func(w http.ResponseWriter, r *http.Request) {
+		handleConfigDriveISO(w, r, k8sClient, log)
 	})
 
 	log.Info("Starting boot server", "address", ipxeServerAddr)
@@ -471,6 +484,99 @@ func SetStatusCondition(ctx context.Context, k8sClient client.Client, log logr.L
 	}
 
 	return nil
+}
+
+func handleConfigDriveISO(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger) {
+	log.Info("Processing config drive ISO request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
+	ctx := r.Context()
+
+	filename := path.Base(r.URL.Path)
+	uuid := strings.TrimSuffix(filename, ".iso")
+
+	if uuid == "" {
+		http.Error(w, "Bad Request: UUID is required", http.StatusBadRequest)
+		log.Info("Bad request: missing UUID")
+		return
+	}
+
+	bootConfig := &metalv1alpha1.ServerBootConfiguration{}
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: uuid}, bootConfig); err != nil {
+		http.Error(w, "Not Found: ServerBootConfiguration not found", http.StatusNotFound)
+		log.Error(err, "Failed to get ServerBootConfiguration", "uuid", uuid)
+		return
+	}
+
+	if bootConfig.Spec.IgnitionSecretRef == nil {
+		http.Error(w, "Bad Request: No ignition secret specified", http.StatusBadRequest)
+		log.Info("No ignition secret specified in ServerBootConfiguration", "uuid", uuid)
+		return
+	}
+
+	secret := &corev1.Secret{}
+	secretKey := types.NamespacedName{
+		Name:      bootConfig.Spec.IgnitionSecretRef.Name,
+		Namespace: bootConfig.Namespace,
+	}
+	if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
+		http.Error(w, "Not Found: Ignition secret not found", http.StatusNotFound)
+		log.Error(err, "Failed to get ignition secret", "secretName", secretKey.Name)
+		return
+	}
+
+	cacheKey := fmt.Sprintf("%s-%s", string(bootConfig.UID), secret.ResourceVersion)
+	if cachedISO, found := configDriveCache.Get(cacheKey); found {
+		log.Info("Serving config drive ISO from cache", "uuid", uuid)
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.iso", uuid))
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(cachedISO)))
+		w.Write(cachedISO)
+		return
+	}
+
+	ignitionData, exists := secret.Data["ignition"]
+	if !exists {
+		http.Error(w, "Bad Request: Ignition data not found in secret", http.StatusBadRequest)
+		log.Info("Ignition data not found in secret", "secretName", secretKey.Name)
+		return
+	}
+
+	isoData, err := generateConfigDriveISO(ignitionData)
+	if err != nil {
+		http.Error(w, "Internal Server Error: Failed to generate ISO", http.StatusInternalServerError)
+		log.Error(err, "Failed to generate config drive ISO")
+		return
+	}
+
+	configDriveCache.Set(cacheKey, isoData, secret.ResourceVersion)
+
+	log.Info("Successfully generated and cached config drive ISO", "uuid", uuid, "size", len(isoData))
+
+	// Serve the ISO
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.iso", uuid))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(isoData)))
+	w.Write(isoData)
+}
+
+func generateConfigDriveISO(ignitionData []byte) ([]byte, error) {
+
+	writer, err := iso9660.NewWriter()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ISO writer: %w", err)
+	}
+	defer writer.Cleanup()
+
+	err = writer.AddFile(bytes.NewReader(ignitionData), "ignition/config.ign")
+	if err != nil {
+		return nil, fmt.Errorf("failed to add ignition file: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := writer.WriteTo(&buf, "IGNITION"); err != nil {
+		return nil, fmt.Errorf("failed to write ISO: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
 func updateCondition(conditions []v1.Condition, newCondition v1.Condition) []v1.Condition {

@@ -62,6 +62,12 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcileExists(ctx context.Cont
 	if !config.DeletionTimestamp.IsZero() {
 		return r.delete(ctx, log, config)
 	}
+	
+	if config.Spec.BootType != "" && config.Spec.BootType != metalv1alpha1.BootTypePXE {
+		log.V(1).Info("Skipping ServerBootConfiguration, not PXE boot type", "bootType", config.Spec.BootType)
+		return ctrl.Result{}, nil
+	}
+	
 	return r.reconcile(ctx, log, config)
 }
 

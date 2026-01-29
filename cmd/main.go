@@ -46,10 +46,11 @@ var (
 
 const (
 	// core controllers
-	ipxeBootConfigController       = "ipxebootconfig"
-	serverBootConfigControllerPxe  = "serverbootconfigpxe"
-	httpBootConfigController       = "httpbootconfig"
-	serverBootConfigControllerHttp = "serverbootconfighttp"
+	ipxeBootConfigController               = "ipxebootconfig"
+	serverBootConfigControllerPxe          = "serverbootconfigpxe"
+	httpBootConfigController               = "httpbootconfig"
+	serverBootConfigControllerHttp         = "serverbootconfighttp"
+	serverBootConfigControllerVirtualMedia = "serverbootconfigvirtualmedia"
 )
 
 func init() {
@@ -104,6 +105,7 @@ func main() {
 		ipxeBootConfigController,
 		serverBootConfigControllerPxe,
 		serverBootConfigControllerHttp,
+		serverBootConfigControllerVirtualMedia,
 		httpBootConfigController,
 	)
 
@@ -267,6 +269,19 @@ func main() {
 			Scheme: mgr.GetScheme(),
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "HTTPBootConfig")
+			os.Exit(1)
+		}
+	}
+
+	if controllers.Enabled(serverBootConfigControllerVirtualMedia) {
+		if err = (&controller.ServerBootConfigurationVirtualMediaReconciler{
+			Client:               mgr.GetClient(),
+			Scheme:               mgr.GetScheme(),
+			ImageServerURL:       imageServerURL,
+			ConfigDriveServerURL: ipxeServiceURL,
+			Architecture:         architecture,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigVirtualMedia")
 			os.Exit(1)
 		}
 	}

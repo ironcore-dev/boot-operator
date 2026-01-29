@@ -9,6 +9,7 @@ require (
 	github.com/ironcore-dev/controller-utils v0.11.0
 	github.com/ironcore-dev/metal v0.0.0-20240624131301-18385f342755
 	github.com/ironcore-dev/metal-operator v0.2.1
+	github.com/kdomanski/iso9660 v0.4.0
 	github.com/onsi/ginkgo/v2 v2.27.5
 	github.com/onsi/gomega v1.39.0
 	github.com/opencontainers/image-spec v1.1.1
