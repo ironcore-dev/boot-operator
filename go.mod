@@ -11,7 +11,7 @@ require (
 	github.com/ironcore-dev/metal-operator v0.2.1
 	github.com/kdomanski/iso9660 v0.4.0
 	github.com/onsi/ginkgo/v2 v2.28.1
-	github.com/onsi/gomega v1.39.0
+	github.com/onsi/gomega v1.39.1
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/spf13/cobra v1.10.2
 	k8s.io/api v0.34.1
