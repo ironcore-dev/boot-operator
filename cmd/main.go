@@ -354,7 +354,7 @@ func IndexHTTPBootConfigByNetworkIDs(ctx context.Context, mgr ctrl.Manager) erro
 	return mgr.GetFieldIndexer().IndexField(
 		ctx,
 		&bootv1alpha1.HTTPBootConfig{},
-		bootv1alpha1.SystemIPIndexKey,
+		bootv1alpha1.NetworkIdentifierIndexKey,
 		func(Obj client.Object) []string {
 			HTTPBootConfig := Obj.(*bootv1alpha1.HTTPBootConfig)
 			return HTTPBootConfig.Spec.NetworkIdentifiers
