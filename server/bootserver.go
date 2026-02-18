@@ -66,15 +66,10 @@ func RunBootServer(
 	imageServerURL string,
 	architecture string,
 ) error {
-<<<<<<< HEAD
-	configDriveCache = NewConfigDriveCache(10*time.Minute, 100*1024*1024)
-	
-=======
 
 	// Initialize config drive cache with 10 minute TTL and 100MB max size
 	configDriveCache = NewConfigDriveCache(10*time.Minute, 100*1024*1024)
 
->>>>>>> b022a74 (Changes to support boot from virtual media)
 	http.HandleFunc("/ipxe/", func(w http.ResponseWriter, r *http.Request) {
 		handleIPXE(w, r, k8sClient, log, ipxeServiceURL)
 	})
@@ -554,7 +549,7 @@ func handleConfigDriveISO(w http.ResponseWriter, r *http.Request, k8sClient clie
 		return
 	}
 
-<<<<<<< HEAD
+
 	// Lookup VirtualMediaBootConfig by SystemUUID index
 	virtualMediaConfigList := &bootv1alpha1.VirtualMediaBootConfigList{}
 	err := k8sClient.List(ctx, virtualMediaConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid})
@@ -586,30 +581,39 @@ func handleConfigDriveISO(w http.ResponseWriter, r *http.Request, k8sClient clie
 	if virtualMediaConfig.Spec.IgnitionSecretRef == nil {
 		http.Error(w, "Bad Request: No ignition secret specified", http.StatusBadRequest)
 		log.Info("No ignition secret specified in VirtualMediaBootConfig", "uuid", uuid)
-=======
-	bootConfig := &metalv1alpha1.ServerBootConfiguration{}
-	if err := k8sClient.Get(ctx, types.NamespacedName{Name: uuid}, bootConfig); err != nil {
-		http.Error(w, "Not Found: ServerBootConfiguration not found", http.StatusNotFound)
-		log.Error(err, "Failed to get ServerBootConfiguration", "uuid", uuid)
 		return
 	}
 
-	if bootConfig.Spec.IgnitionSecretRef == nil {
+	// Try uppercase UUID if not found
+	if len(virtualMediaConfigList.Items) == 0 {
+		err = k8sClient.List(ctx, virtualMediaConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToUpper(uuid)})
+		if client.IgnoreNotFound(err) != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			log.Error(err, "Failed to list VirtualMediaBootConfig with uppercase UUID", "uuid", uuid)
+			return
+		}
+	}
+
+	if len(virtualMediaConfigList.Items) == 0 {
+		http.Error(w, "Not Found: VirtualMediaBootConfig not found", http.StatusNotFound)
+		log.Info("VirtualMediaBootConfig not found for UUID", "uuid", uuid)
+		return
+	}
+
+	// Use first matching config (there should only be one per UUID)
+	virtualMediaConfig := &virtualMediaConfigList.Items[0]
+
+	if virtualMediaConfig.Spec.IgnitionSecretRef == nil {
 		http.Error(w, "Bad Request: No ignition secret specified", http.StatusBadRequest)
-		log.Info("No ignition secret specified in ServerBootConfiguration", "uuid", uuid)
->>>>>>> b022a74 (Changes to support boot from virtual media)
+		log.Info("No ignition secret specified in VirtualMediaBootConfig", "uuid", uuid)
 		return
 	}
 
 	secret := &corev1.Secret{}
 	secretKey := types.NamespacedName{
-<<<<<<< HEAD
+
 		Name:      virtualMediaConfig.Spec.IgnitionSecretRef.Name,
 		Namespace: virtualMediaConfig.Namespace,
-=======
-		Name:      bootConfig.Spec.IgnitionSecretRef.Name,
-		Namespace: bootConfig.Namespace,
->>>>>>> b022a74 (Changes to support boot from virtual media)
 	}
 	if err := k8sClient.Get(ctx, secretKey, secret); err != nil {
 		http.Error(w, "Not Found: Ignition secret not found", http.StatusNotFound)
@@ -617,7 +621,7 @@ func handleConfigDriveISO(w http.ResponseWriter, r *http.Request, k8sClient clie
 		return
 	}
 
-<<<<<<< HEAD
+
 	cacheKey := fmt.Sprintf("%s-%s", string(virtualMediaConfig.UID), secret.ResourceVersion)
 	var isoData []byte
 	
@@ -665,41 +669,51 @@ func handleConfigDriveISO(w http.ResponseWriter, r *http.Request, k8sClient clie
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.iso", uuid))
 	http.ServeContent(w, r, fmt.Sprintf("%s.iso", uuid), time.Time{}, bytes.NewReader(isoData))
-=======
-	cacheKey := fmt.Sprintf("%s-%s", string(bootConfig.UID), secret.ResourceVersion)
 	if cachedISO, found := configDriveCache.Get(cacheKey); found {
 		log.Info("Serving config drive ISO from cache", "uuid", uuid)
-		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.iso", uuid))
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(cachedISO)))
-		w.Write(cachedISO)
-		return
+		isoData = cachedISO
+	} else {
+		ignitionData, exists := secret.Data["ignition"]
+		if !exists {
+			http.Error(w, "Bad Request: Ignition data not found in secret", http.StatusBadRequest)
+			log.Info("Ignition data not found in secret", "secretName", secretKey.Name)
+			return
+		}
+
+		// Check for format field and convert YAML to JSON if needed
+		ignitionFormat := string(secret.Data["format"])
+		var ignitionJSONData []byte
+		var err error
+		
+		switch strings.TrimSpace(ignitionFormat) {
+		case bootv1alpha1.FCOSFormat:
+			ignitionJSONData, err = renderIgnition(ignitionData)
+			if err != nil {
+				http.Error(w, "Internal Server Error: Failed to convert ignition YAML to JSON", http.StatusInternalServerError)
+				log.Error(err, "Failed to render ignition data to JSON")
+				return
+			}
+			log.V(1).Info("Converted FCOS/Butane YAML to Ignition JSON", "uuid", uuid)
+		default:
+			ignitionJSONData = ignitionData
+		}
+
+		isoData, err = generateConfigDriveISO(ignitionJSONData)
+		if err != nil {
+			http.Error(w, "Internal Server Error: Failed to generate ISO", http.StatusInternalServerError)
+			log.Error(err, "Failed to generate config drive ISO")
+			return
+		}
+
+		configDriveCache.Set(cacheKey, isoData, secret.ResourceVersion)
+		log.Info("Successfully generated and cached config drive ISO", "uuid", uuid, "size", len(isoData))
 	}
 
-	ignitionData, exists := secret.Data["ignition"]
-	if !exists {
-		http.Error(w, "Bad Request: Ignition data not found in secret", http.StatusBadRequest)
-		log.Info("Ignition data not found in secret", "secretName", secretKey.Name)
-		return
-	}
-
-	isoData, err := generateConfigDriveISO(ignitionData)
-	if err != nil {
-		http.Error(w, "Internal Server Error: Failed to generate ISO", http.StatusInternalServerError)
-		log.Error(err, "Failed to generate config drive ISO")
-		return
-	}
-
-	configDriveCache.Set(cacheKey, isoData, secret.ResourceVersion)
-
-	log.Info("Successfully generated and cached config drive ISO", "uuid", uuid, "size", len(isoData))
-
-	// Serve the ISO
+	// Use http.ServeContent to support Range requests (required by QEMU)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.iso", uuid))
-	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(isoData)))
-	w.Write(isoData)
->>>>>>> b022a74 (Changes to support boot from virtual media)
+
+	http.ServeContent(w, r, fmt.Sprintf("%s.iso", uuid), time.Time{}, bytes.NewReader(isoData))
 }
 
 func generateConfigDriveISO(ignitionData []byte) ([]byte, error) {

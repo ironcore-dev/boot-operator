@@ -298,13 +298,23 @@ func main() {
 		}
 	}
 
-	if controllers.Enabled(serverBootConfigControllerVirtualMedia) {
-		if err = (&controller.ServerBootConfigurationVirtualMediaReconciler{
+	if controllers.Enabled(virtualMediaBootConfigController) {
+		if err = (&controller.VirtualMediaBootConfigReconciler{
 			Client:               mgr.GetClient(),
 			Scheme:               mgr.GetScheme(),
 			ImageServerURL:       imageServerURL,
 			ConfigDriveServerURL: ipxeServiceURL,
 			Architecture:         architecture,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "VirtualMediaBootConfig")
+			os.Exit(1)
+		}
+	}
+
+	if controllers.Enabled(serverBootConfigControllerVirtualMedia) {
+		if err = (&controller.ServerBootConfigurationVirtualMediaReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigVirtualMedia")
 			os.Exit(1)

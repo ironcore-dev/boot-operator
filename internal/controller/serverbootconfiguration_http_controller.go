@@ -64,21 +64,11 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcileExists(ctx context.Cont
 	if !config.DeletionTimestamp.IsZero() {
 		return r.delete(ctx, log, config)
 	}
-<<<<<<< HEAD
 
 	if config.Spec.BootMethod != "" && config.Spec.BootMethod != metalv1alpha1.BootMethodPXE {
 		log.V(1).Info("Skipping ServerBootConfiguration, not PXE boot method", "bootMethod", config.Spec.BootMethod)
 		return ctrl.Result{}, nil
 	}
-
-=======
-	
-	if config.Spec.BootType != "" && config.Spec.BootType != metalv1alpha1.BootTypePXE {
-		log.V(1).Info("Skipping ServerBootConfiguration, not PXE boot type", "bootType", config.Spec.BootType)
-		return ctrl.Result{}, nil
-	}
-	
->>>>>>> b022a74 (Changes to support boot from virtual media)
 	return r.reconcile(ctx, log, config)
 }
 
