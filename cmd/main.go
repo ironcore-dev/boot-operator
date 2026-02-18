@@ -46,11 +46,12 @@ var (
 
 const (
 	// core controllers
-	ipxeBootConfigController               = "ipxebootconfig"
-	serverBootConfigControllerPxe          = "serverbootconfigpxe"
-	httpBootConfigController               = "httpbootconfig"
-	serverBootConfigControllerHttp         = "serverbootconfighttp"
-	serverBootConfigControllerVirtualMedia = "serverbootconfigvirtualmedia"
+	ipxeBootConfigController                         = "ipxebootconfig"
+	serverBootConfigControllerPxe                    = "serverbootconfigpxe"
+	httpBootConfigController                         = "httpbootconfig"
+	serverBootConfigControllerHttp                   = "serverbootconfighttp"
+	virtualMediaBootConfigController                 = "virtualmediabootconfig"
+	serverBootConfigControllerVirtualMedia           = "serverbootconfigvirtualmedia"
 )
 
 func init() {
@@ -81,7 +82,7 @@ func main() {
 	var imageServerURL string
 	var architecture string
 
-	flag.StringVar(&architecture, "architecture", "amd64", "Target system architecture (e.g., amd64, arm64)")
+	flag.StringVar(&architecture, "architecture", "arm64", "Target system architecture (e.g., amd64, arm64)")
 	flag.IntVar(&ipxeServicePort, "ipxe-service-port", 5000, "IPXE Service port to listen on.")
 	flag.StringVar(&ipxeServiceProtocol, "ipxe-service-protocol", "http", "IPXE Service Protocol.")
 	flag.StringVar(&ipxeServiceURL, "ipxe-service-url", "", "IPXE Service URL.")
@@ -105,6 +106,7 @@ func main() {
 		ipxeBootConfigController,
 		serverBootConfigControllerPxe,
 		serverBootConfigControllerHttp,
+		virtualMediaBootConfigController,
 		serverBootConfigControllerVirtualMedia,
 		httpBootConfigController,
 	)
@@ -273,13 +275,23 @@ func main() {
 		}
 	}
 
-	if controllers.Enabled(serverBootConfigControllerVirtualMedia) {
-		if err = (&controller.ServerBootConfigurationVirtualMediaReconciler{
+	if controllers.Enabled(virtualMediaBootConfigController) {
+		if err = (&controller.VirtualMediaBootConfigReconciler{
 			Client:               mgr.GetClient(),
 			Scheme:               mgr.GetScheme(),
 			ImageServerURL:       imageServerURL,
 			ConfigDriveServerURL: ipxeServiceURL,
 			Architecture:         architecture,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "VirtualMediaBootConfig")
+			os.Exit(1)
+		}
+	}
+
+	if controllers.Enabled(serverBootConfigControllerVirtualMedia) {
+		if err = (&controller.ServerBootConfigurationVirtualMediaReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigVirtualMedia")
 			os.Exit(1)
@@ -314,6 +326,11 @@ func main() {
 
 	if err := IndexHTTPBootConfigByNetworkIDs(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to set up indexer for HTTPBootConfig NetworkIdentifiers")
+		os.Exit(1)
+	}
+
+	if err := IndexVirtualMediaBootConfigBySystemUUID(ctx, mgr); err != nil {
+		setupLog.Error(err, "unable to set up indexer for VirtualMediaBootConfig SystemUUID")
 		os.Exit(1)
 	}
 
@@ -373,6 +390,18 @@ func IndexHTTPBootConfigByNetworkIDs(ctx context.Context, mgr ctrl.Manager) erro
 		func(Obj client.Object) []string {
 			HTTPBootConfig := Obj.(*bootv1alpha1.HTTPBootConfig)
 			return HTTPBootConfig.Spec.NetworkIdentifiers
+		},
+	)
+}
+
+func IndexVirtualMediaBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) error {
+	return mgr.GetFieldIndexer().IndexField(
+		ctx,
+		&bootv1alpha1.VirtualMediaBootConfig{},
+		bootv1alpha1.SystemUUIDIndexKey,
+		func(Obj client.Object) []string {
+			virtualMediaBootConfig := Obj.(*bootv1alpha1.VirtualMediaBootConfig)
+			return []string{virtualMediaBootConfig.Spec.SystemUUID}
 		},
 	)
 }
