@@ -48,7 +48,7 @@ var predefinedConditions = map[string]v1.Condition{
 	},
 }
 
-func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultUKIURL string) {
+func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultUKIURL string) error {
 	http.HandleFunc("/ipxe/", func(w http.ResponseWriter, r *http.Request) {
 		handleIPXE(w, r, k8sClient, log, ipxeServiceURL)
 	})
@@ -90,8 +90,10 @@ func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient clien
 	log.Info("Starting boot server", "address", ipxeServerAddr)
 	if err := http.ListenAndServe(ipxeServerAddr, nil); err != nil {
 		log.Error(err, "failed to start boot server")
-		panic(err)
+		return err
 	}
+
+	return nil
 }
 
 func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, ipxeServiceURL string) {
@@ -393,7 +395,7 @@ func handleHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Cli
 
 	var httpBootConfigs bootv1alpha1.HTTPBootConfigList
 	for _, ip := range clientIPs {
-		if err := k8sClient.List(ctx, &httpBootConfigs, client.MatchingFields{bootv1alpha1.SystemIPIndexKey: ip}); err != nil {
+		if err := k8sClient.List(ctx, &httpBootConfigs, client.MatchingFields{bootv1alpha1.NetworkIdentifierIndexKey: ip}); err != nil {
 			log.Info("Failed to list HTTPBootConfig for IP", "IP", ip, "error", err)
 			continue
 		}
