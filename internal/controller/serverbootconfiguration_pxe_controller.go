@@ -141,7 +141,11 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 	}
 	log.V(1).Info("Set controller reference")
 
-	if err := r.Patch(ctx, config, client.Apply, fieldOwner, client.ForceOwnership); err != nil {
+	applyData, err := json.Marshal(config)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to marshal IPXE config apply data: %w", err)
+	}
+	if err := r.Patch(ctx, config, client.RawPatch(types.ApplyPatchType, applyData), fieldOwner, client.ForceOwnership); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to apply IPXE config: %w", err)
 	}
 	log.V(1).Info("Applied IPXE config for server boot config")
