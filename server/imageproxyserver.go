@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/go-logr/logr"
+	"github.com/ironcore-dev/boot-operator/internal/registry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -29,8 +30,8 @@ type AuthMethod int
 
 const (
 	AuthNone   AuthMethod = iota // Anonymous access
-	AuthBasic                     // Basic username:password
-	AuthBearer                    // Bearer token via /token endpoint
+	AuthBasic                    // Basic username:password
+	AuthBearer                   // Bearer token via /token endpoint
 )
 
 type RegistryInfo struct {
@@ -56,63 +57,9 @@ type ImageDetails struct {
 var registryCache = make(map[string]*RegistryInfo)
 var registryCacheMutex sync.RWMutex
 
-// Extract registry domain from OCI image reference
-func extractRegistryDomain(imageRef string) string {
-	parts := strings.SplitN(imageRef, "/", 2)
-	if len(parts) < 2 {
-		// No slash means Docker Hub implicit
-		return "registry-1.docker.io"
-	}
-
-	// Check if first part looks like a domain (has dot or colon)
-	if strings.Contains(parts[0], ".") || strings.Contains(parts[0], ":") {
-		return parts[0]
-	}
-
-	// Implicit Docker Hub (e.g., "library/ubuntu")
-	return "registry-1.docker.io"
-}
-
 // Extract repository path without registry
 func extractRepository(imageRef, registryDomain string) string {
 	return strings.TrimPrefix(imageRef, registryDomain+"/")
-}
-
-// Check if registry is in a comma-separated list (exact match only)
-func isInList(registry string, list string) bool {
-	if list == "" {
-		return false
-	}
-	
-	items := strings.Split(list, ",")
-	for _, item := range items {
-		if strings.TrimSpace(item) == registry {
-			return true
-		}
-	}
-	return false
-}
-
-// Check if registry is allowed based on allow/block lists
-// - If ALLOWED_REGISTRIES is set: only those registries are allowed (whitelist)
-// - Else if BLOCKED_REGISTRIES is set: all except those are allowed (blacklist)
-// - Else: DENY ALL - operator must explicitly configure registry policy
-func isRegistryAllowed(registry string) bool {
-	allowList := os.Getenv("ALLOWED_REGISTRIES")
-	blockList := os.Getenv("BLOCKED_REGISTRIES")
-	
-	// Allow list takes precedence (more restrictive)
-	if allowList != "" {
-		return isInList(registry, allowList)
-	}
-	
-	// Block list mode: allow all except blocked
-	if blockList != "" {
-		return !isInList(registry, blockList)
-	}
-	
-	// Default: deny all - require explicit configuration
-	return false
 }
 
 // Parse WWW-Authenticate parameter value
@@ -154,7 +101,7 @@ func detectRegistryAuth(registryDomain, repository string) (*RegistryInfo, error
 	if err != nil {
 		return nil, fmt.Errorf("registry unreachable: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	info := &RegistryInfo{Domain: registryDomain}
 
@@ -220,7 +167,7 @@ func getBearerToken(tokenURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -278,7 +225,7 @@ func parseHttpBootImagePath(path string) (ImageDetails, error) {
 	digestSegment := segments[len(segments)-1]
 
 	// Extract registry domain and repository
-	registryDomain := extractRegistryDomain(imageName)
+	registryDomain := registry.ExtractRegistryDomain(imageName)
 	repositoryName := extractRepository(imageName, registryDomain)
 
 	digestSegment = strings.TrimSuffix(digestSegment, ".efi")
@@ -297,23 +244,22 @@ func parseHttpBootImagePath(path string) (ImageDetails, error) {
 }
 
 func handleDockerRegistry(w http.ResponseWriter, r *http.Request, imageDetails *ImageDetails, log logr.Logger) {
-	registry := imageDetails.RegistryDomain
+	registryDomain := imageDetails.RegistryDomain
 	repository := imageDetails.RepositoryName
 
-	log.Info("Processing registry request", "registry", registry, "repository", repository, "digest", imageDetails.LayerDigest)
+	log.V(1).Info("Processing registry request", "registry", registryDomain, "repository", repository, "digest", imageDetails.LayerDigest)
 
-	// Security check
-	if !isRegistryAllowed(registry) {
+	if !registry.IsRegistryAllowed(registryDomain) {
 		http.Error(w, "Forbidden: Registry not allowed", http.StatusForbidden)
-		log.Info("Registry blocked", "registry", registry, "allowList", os.Getenv("ALLOWED_REGISTRIES"), "blockList", os.Getenv("BLOCKED_REGISTRIES"))
+		log.Info("Registry blocked", "registry", registryDomain, "allowList", os.Getenv("ALLOWED_REGISTRIES"), "blockList", os.Getenv("BLOCKED_REGISTRIES"))
 		return
 	}
 
 	// Auto-detect auth method (with caching)
-	registryInfo, err := getOrDetectRegistry(registry, repository)
+	registryInfo, err := getOrDetectRegistry(registryDomain, repository)
 	if err != nil {
 		http.Error(w, "Registry detection failed", http.StatusBadGateway)
-		log.Error(err, "Failed to detect registry", "registry", registry)
+		log.Error(err, "Failed to detect registry", "registry", registryDomain)
 		return
 	}
 
@@ -327,19 +273,19 @@ func handleDockerRegistry(w http.ResponseWriter, r *http.Request, imageDetails *
 			log.Error(err, "Failed to get bearer token", "tokenURL", registryInfo.TokenURL)
 			return
 		}
-		log.V(1).Info("Obtained bearer token", "registry", registry)
+		log.V(1).Info("Obtained bearer token", "registry", registryDomain)
 	case AuthBasic:
 		// TODO: Support basic auth with credentials from secrets
 		http.Error(w, "Basic auth not yet implemented", http.StatusNotImplemented)
-		log.Info("Basic auth required but not yet supported", "registry", registry)
+		log.Info("Basic auth required but not yet supported", "registry", registryDomain)
 		return
 	case AuthNone:
-		log.V(1).Info("Registry allows anonymous access", "registry", registry)
+		log.V(1).Info("Registry allows anonymous access", "registry", registryDomain)
 	}
 
 	// Proxy the blob request
 	digest := imageDetails.LayerDigest
-	targetURL := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registry, repository, digest)
+	targetURL := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registryDomain, repository, digest)
 	proxyURL, _ := url.Parse(targetURL)
 
 	proxy := &httputil.ReverseProxy{
@@ -439,9 +385,9 @@ func parseImageURL(queries url.Values) (imageDetails ImageDetails, err error) {
 	}
 
 	ociImageName = strings.TrimSuffix(ociImageName, ".efi")
-	
+
 	// Extract registry domain and repository
-	registryDomain := extractRegistryDomain(ociImageName)
+	registryDomain := registry.ExtractRegistryDomain(ociImageName)
 	repositoryName := extractRepository(ociImageName, registryDomain)
 
 	return ImageDetails{

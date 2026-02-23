@@ -12,6 +12,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 
 	"github.com/containerd/containerd/remotes/docker"
+	"github.com/ironcore-dev/boot-operator/internal/registry"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	corev1 "k8s.io/api/core/v1"
@@ -36,9 +37,10 @@ const (
 
 type ServerBootConfigurationHTTPReconciler struct {
 	client.Client
-	Scheme         *runtime.Scheme
-	ImageServerURL string
-	Architecture   string
+	Scheme            *runtime.Scheme
+	ImageServerURL    string
+	Architecture      string
+	RegistryValidator *registry.Validator
 }
 
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverbootconfigurations,verbs=get;list;watch
@@ -87,6 +89,13 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 
 	ukiURL, err := r.constructUKIURL(ctx, config.Spec.Image)
 	if err != nil {
+		log.Error(err, "Failed to construct UKI URL")
+		if patchErr := r.patchConfigStateFromHTTPState(ctx,
+			&bootv1alpha1.HTTPBootConfig{Status: bootv1alpha1.HTTPBootConfigStatus{
+				State: bootv1alpha1.HTTPBootConfigStateError}},
+			config); patchErr != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch state to error: %w (original error: %w)", patchErr, err)
+		}
 		return ctrl.Result{}, fmt.Errorf("failed to construct UKI URL: %w", err)
 	}
 	log.V(1).Info("Extracted UKI URL for boot")
@@ -203,8 +212,14 @@ func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(ctx context.Cont
 }
 
 func (r *ServerBootConfigurationHTTPReconciler) getUKIDigestFromNestedManifest(ctx context.Context, imageName, imageVersion string) (string, error) {
-	resolver := docker.NewResolver(docker.ResolverOptions{})
 	imageRef := fmt.Sprintf("%s:%s", imageName, imageVersion)
+	if r.RegistryValidator != nil {
+		if err := r.RegistryValidator.ValidateImageRegistry(imageRef); err != nil {
+			return "", fmt.Errorf("registry validation failed: %w", err)
+		}
+	}
+
+	resolver := docker.NewResolver(docker.ResolverOptions{})
 	name, desc, err := resolver.Resolve(ctx, imageRef)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve image reference: %w", err)

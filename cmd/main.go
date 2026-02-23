@@ -34,6 +34,7 @@ import (
 
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	"github.com/ironcore-dev/boot-operator/internal/controller"
+	"github.com/ironcore-dev/boot-operator/internal/registry"
 	bootserver "github.com/ironcore-dev/boot-operator/server"
 	//+kubebuilder:scaffold:imports
 )
@@ -227,6 +228,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Initialize registry validator for OCI image validation
+	registryValidator := registry.NewValidator()
+	setupLog.Info("Initialized registry validator", "allowedRegistries", os.Getenv("ALLOWED_REGISTRIES"), "blockedRegistries", os.Getenv("BLOCKED_REGISTRIES"))
+
 	if controllers.Enabled(ipxeBootConfigController) {
 		if err = (&controller.IPXEBootConfigReconciler{
 			Client: mgr.GetClient(),
@@ -239,10 +244,11 @@ func main() {
 
 	if controllers.Enabled(serverBootConfigControllerPxe) {
 		if err = (&controller.ServerBootConfigurationPXEReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			IPXEServiceURL: ipxeServiceURL,
-			Architecture:   architecture,
+			Client:            mgr.GetClient(),
+			Scheme:            mgr.GetScheme(),
+			IPXEServiceURL:    ipxeServiceURL,
+			Architecture:      architecture,
+			RegistryValidator: registryValidator,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigPxe")
 			os.Exit(1)
@@ -251,10 +257,11 @@ func main() {
 
 	if controllers.Enabled(serverBootConfigControllerHttp) {
 		if err = (&controller.ServerBootConfigurationHTTPReconciler{
-			Client:         mgr.GetClient(),
-			Scheme:         mgr.GetScheme(),
-			ImageServerURL: imageServerURL,
-			Architecture:   architecture,
+			Client:            mgr.GetClient(),
+			Scheme:            mgr.GetScheme(),
+			ImageServerURL:    imageServerURL,
+			Architecture:      architecture,
+			RegistryValidator: registryValidator,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigHttp")
 			os.Exit(1)

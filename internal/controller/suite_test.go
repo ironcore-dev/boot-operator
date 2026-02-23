@@ -6,6 +6,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -13,6 +14,7 @@ import (
 
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/config"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/ironcore-dev/controller-utils/modutils"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
@@ -33,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	"github.com/ironcore-dev/boot-operator/internal/registry"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -60,6 +63,12 @@ func TestControllers(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+
+	// Set ALLOWED_REGISTRIES for tests to use ghcr.io images
+	Expect(os.Setenv("ALLOWED_REGISTRIES", "ghcr.io")).To(Succeed())
+	DeferCleanup(func() {
+		Expect(os.Unsetenv("ALLOWED_REGISTRIES")).To(Succeed())
+	})
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -120,6 +129,9 @@ func SetupTest() *corev1.Namespace {
 
 		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme: scheme.Scheme,
+			Metrics: metricsserver.Options{
+				BindAddress: "0", // Disable metrics server to avoid port 8080 conflicts with Tilt
+			},
 			Controller: config.Controller{
 				// need to skip unique controller name validation
 				// since all tests need a dedicated controller
@@ -128,17 +140,21 @@ func SetupTest() *corev1.Namespace {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
+		registryValidator := registry.NewValidator()
+
 		Expect((&ServerBootConfigurationPXEReconciler{
-			Client:         k8sManager.GetClient(),
-			Scheme:         k8sManager.GetScheme(),
-			IPXEServiceURL: "http://localhost:5000",
-			Architecture:   "arm64",
+			Client:            k8sManager.GetClient(),
+			Scheme:            k8sManager.GetScheme(),
+			IPXEServiceURL:    "http://localhost:5000",
+			Architecture:      runtime.GOARCH,
+			RegistryValidator: registryValidator,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
 		Expect((&ServerBootConfigurationHTTPReconciler{
-			Client:         k8sManager.GetClient(),
-			Scheme:         k8sManager.GetScheme(),
-			ImageServerURL: "http://localhost:5000/httpboot",
+			Client:            k8sManager.GetClient(),
+			Scheme:            k8sManager.GetScheme(),
+			ImageServerURL:    "http://localhost:5000/httpboot",
+			RegistryValidator: registryValidator,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
 		go func() {

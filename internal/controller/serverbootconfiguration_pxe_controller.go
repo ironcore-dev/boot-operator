@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	"github.com/ironcore-dev/boot-operator/internal/registry"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -56,9 +57,10 @@ const (
 
 type ServerBootConfigurationPXEReconciler struct {
 	client.Client
-	Scheme         *runtime.Scheme
-	IPXEServiceURL string
-	Architecture   string
+	Scheme            *runtime.Scheme
+	IPXEServiceURL    string
+	Architecture      string
+	RegistryValidator *registry.Validator
 }
 
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverbootconfigurations,verbs=get;list;watch
@@ -235,8 +237,14 @@ func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx con
 }
 
 func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest(ctx context.Context, imageName, imageVersion string) (string, string, string, error) {
-	resolver := docker.NewResolver(docker.ResolverOptions{})
 	imageRef := fmt.Sprintf("%s:%s", imageName, imageVersion)
+	if r.RegistryValidator != nil {
+		if err := r.RegistryValidator.ValidateImageRegistry(imageRef); err != nil {
+			return "", "", "", fmt.Errorf("registry validation failed: %w", err)
+		}
+	}
+
+	resolver := docker.NewResolver(docker.ResolverOptions{})
 	name, desc, err := resolver.Resolve(ctx, imageRef)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to resolve image reference: %w", err)
