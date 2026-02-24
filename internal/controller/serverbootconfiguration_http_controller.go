@@ -115,7 +115,11 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 	}
 	log.V(1).Info("Set controller reference")
 
-	if err := r.Patch(ctx, httpBootConfig, client.Apply, client.FieldOwner("server-boot-controller"), client.ForceOwnership); err != nil {
+	applyData, err := json.Marshal(httpBootConfig)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to marshal HTTPBoot config apply data: %w", err)
+	}
+	if err := r.Patch(ctx, httpBootConfig, client.RawPatch(types.ApplyPatchType, applyData), client.FieldOwner("server-boot-controller"), client.ForceOwnership); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to apply HTTPBoot config: %w", err)
 	}
 	log.V(1).Info("Applied HTTPBoot config for server boot configuration")
