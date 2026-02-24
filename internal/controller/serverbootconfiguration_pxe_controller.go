@@ -223,19 +223,22 @@ func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx con
 }
 
 func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
-	imageDetails := strings.Split(config.Spec.Image, ":")
-	if len(imageDetails) != 2 {
-		return "", "", "", fmt.Errorf("invalid image format")
+	// Parse image reference - split on last ':' to handle registry:port/image:tag format
+	lastColon := strings.LastIndex(config.Spec.Image, ":")
+	if lastColon == -1 {
+		return "", "", "", fmt.Errorf("invalid image format: missing tag")
 	}
+	imageName := config.Spec.Image[:lastColon]
+	imageVersion := config.Spec.Image[lastColon+1:]
 
-	kernelDigest, initrdDigest, squashFSDigest, err := r.getLayerDigestsFromNestedManifest(ctx, imageDetails[0], imageDetails[1])
+	kernelDigest, initrdDigest, squashFSDigest, err := r.getLayerDigestsFromNestedManifest(ctx, imageName, imageVersion)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to fetch layer digests: %w", err)
 	}
 
-	kernelURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], kernelDigest)
-	initrdURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], initrdDigest)
-	squashFSURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageDetails[0], imageDetails[1], squashFSDigest)
+	kernelURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageName, imageVersion, kernelDigest)
+	initrdURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageName, imageVersion, initrdDigest)
+	squashFSURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageName, imageVersion, squashFSDigest)
 
 	return kernelURL, initrdURL, squashFSURL, nil
 }

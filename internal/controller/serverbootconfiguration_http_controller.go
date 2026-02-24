@@ -200,18 +200,21 @@ func (r *ServerBootConfigurationHTTPReconciler) getSystemNetworkIDsFromServer(ct
 }
 
 func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(ctx context.Context, image string) (string, error) {
-	imageDetails := strings.Split(image, ":")
-	if len(imageDetails) != 2 {
-		return "", fmt.Errorf("invalid image format")
+	// Parse image reference - split on last ':' to handle registry:port/image:tag format
+	lastColon := strings.LastIndex(image, ":")
+	if lastColon == -1 {
+		return "", fmt.Errorf("invalid image format: missing tag")
 	}
+	imageName := image[:lastColon]
+	imageVersion := image[lastColon+1:]
 
-	ukiDigest, err := r.getUKIDigestFromNestedManifest(ctx, imageDetails[0], imageDetails[1])
+	ukiDigest, err := r.getUKIDigestFromNestedManifest(ctx, imageName, imageVersion)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch UKI layer digest: %w", err)
 	}
 
 	ukiDigest = strings.TrimPrefix(ukiDigest, "sha256:")
-	ukiURL := fmt.Sprintf("%s/%s/sha256-%s.efi", r.ImageServerURL, imageDetails[0], ukiDigest)
+	ukiURL := fmt.Sprintf("%s/%s/sha256-%s.efi", r.ImageServerURL, imageName, ukiDigest)
 	return ukiURL, nil
 }
 

@@ -36,6 +36,7 @@ import (
 
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	"github.com/ironcore-dev/boot-operator/internal/registry"
+	testregistry "github.com/ironcore-dev/boot-operator/test/registry"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -46,9 +47,10 @@ const (
 )
 
 var (
-	cfg       *rest.Config
-	k8sClient client.Client
-	testEnv   *envtest.Environment
+	cfg          *rest.Config
+	k8sClient    client.Client
+	testEnv      *envtest.Environment
+	mockRegistry *testregistry.MockRegistry
 )
 
 func TestControllers(t *testing.T) {
@@ -64,8 +66,17 @@ func TestControllers(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-	// Set ALLOWED_REGISTRIES for tests to use ghcr.io images
-	Expect(os.Setenv("ALLOWED_REGISTRIES", "ghcr.io")).To(Succeed())
+	By("starting mock OCI registry")
+	mockRegistry = testregistry.NewMockRegistry()
+	DeferCleanup(mockRegistry.Close)
+
+	// Push test images to mock registry (using simple paths without localhost prefix)
+	Expect(mockRegistry.PushPXEImage("ironcore-dev/os-images/gardenlinux", "1877.0", runtime.GOARCH)).To(Succeed())
+	Expect(mockRegistry.PushPXEImageOldFormat("gardenlinux/gardenlinux", "1772.0", runtime.GOARCH)).To(Succeed())
+	Expect(mockRegistry.PushHTTPImage("ironcore-dev/os-images/test-image", "100.1")).To(Succeed())
+
+	// Set ALLOWED_REGISTRIES to use mock registry
+	Expect(os.Setenv("ALLOWED_REGISTRIES", mockRegistry.RegistryAddress())).To(Succeed())
 	DeferCleanup(func() {
 		Expect(os.Unsetenv("ALLOWED_REGISTRIES")).To(Succeed())
 	})
@@ -164,4 +175,9 @@ func SetupTest() *corev1.Namespace {
 	})
 
 	return ns
+}
+
+// MockImageRef returns a fully qualified image reference for the mock registry
+func MockImageRef(name, tag string) string {
+	return fmt.Sprintf("%s/%s:%s", mockRegistry.RegistryAddress(), name, tag)
 }
