@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	"github.com/ironcore-dev/boot-operator/internal/uki"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -22,7 +23,6 @@ const (
 	imageKey       = "imageName"
 	layerDigestKey = "layerDigest"
 	versionKey     = "version"
-	MediaTypeUKI   = "application/vnd.ironcore.image.uki"
 )
 
 type TokenResponse struct {
@@ -208,7 +208,7 @@ func modifyProxyResponse(bearerToken string) func(*http.Response) error {
 		}
 
 		// Rewrite media type if it's a UKI
-		if ct := resp.Header.Get("Content-Type"); ct == MediaTypeUKI {
+		if ct := resp.Header.Get("Content-Type"); ct == uki.MediaTypeUKI {
 			resp.Header.Set("Content-Type", "application/efi")
 		}
 
