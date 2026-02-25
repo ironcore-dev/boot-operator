@@ -65,6 +65,79 @@ func TestExtractRegistryDomain(t *testing.T) {
 	}
 }
 
+func TestNormalizeDockerHubDomain(t *testing.T) {
+	tests := []struct {
+		name   string
+		domain string
+		want   string
+	}{
+		{
+			name:   "lowercase docker.io",
+			domain: "docker.io",
+			want:   "docker.io",
+		},
+		{
+			name:   "uppercase DOCKER.IO",
+			domain: "DOCKER.IO",
+			want:   "docker.io",
+		},
+		{
+			name:   "mixed case Docker.Io",
+			domain: "Docker.Io",
+			want:   "docker.io",
+		},
+		{
+			name:   "lowercase index.docker.io",
+			domain: "index.docker.io",
+			want:   "docker.io",
+		},
+		{
+			name:   "uppercase INDEX.DOCKER.IO",
+			domain: "INDEX.DOCKER.IO",
+			want:   "docker.io",
+		},
+		{
+			name:   "mixed case Index.Docker.IO",
+			domain: "Index.Docker.IO",
+			want:   "docker.io",
+		},
+		{
+			name:   "lowercase registry-1.docker.io",
+			domain: "registry-1.docker.io",
+			want:   "docker.io",
+		},
+		{
+			name:   "uppercase REGISTRY-1.DOCKER.IO",
+			domain: "REGISTRY-1.DOCKER.IO",
+			want:   "docker.io",
+		},
+		{
+			name:   "non-Docker Hub - ghcr.io preserved",
+			domain: "ghcr.io",
+			want:   "ghcr.io",
+		},
+		{
+			name:   "non-Docker Hub - GHCR.IO normalized to lowercase",
+			domain: "GHCR.IO",
+			want:   "ghcr.io",
+		},
+		{
+			name:   "non-Docker Hub - keppel preserved",
+			domain: "keppel.global.cloud.sap",
+			want:   "keppel.global.cloud.sap",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeDockerHubDomain(tt.domain)
+			if got != tt.want {
+				t.Errorf("normalizeDockerHubDomain(%q) = %q, want %q", tt.domain, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestIsRegistryAllowed(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -145,6 +218,46 @@ func TestIsRegistryAllowed(t *testing.T) {
 			blockList:   "",
 			want:        true,
 			description: "handles whitespace in allow list",
+		},
+		{
+			name:        "case-insensitive Docker Hub - uppercase blocklist",
+			registry:    "docker.io",
+			allowList:   "",
+			blockList:   "DOCKER.IO",
+			want:        false,
+			description: "docker.io blocked by uppercase DOCKER.IO in blocklist",
+		},
+		{
+			name:        "case-insensitive Docker Hub - mixed case registry",
+			registry:    "DOCKER.IO",
+			allowList:   "",
+			blockList:   "docker.io",
+			want:        false,
+			description: "uppercase DOCKER.IO blocked by lowercase docker.io in blocklist",
+		},
+		{
+			name:        "case-insensitive Docker Hub - index variant",
+			registry:    "INDEX.DOCKER.IO",
+			allowList:   "",
+			blockList:   "docker.io",
+			want:        false,
+			description: "INDEX.DOCKER.IO normalized and blocked by docker.io",
+		},
+		{
+			name:        "case-insensitive Docker Hub - registry-1 variant",
+			registry:    "REGISTRY-1.DOCKER.IO",
+			allowList:   "",
+			blockList:   "docker.io",
+			want:        false,
+			description: "REGISTRY-1.DOCKER.IO normalized and blocked by docker.io",
+		},
+		{
+			name:        "case-insensitive non-Docker registry matching",
+			registry:    "GHCR.IO",
+			allowList:   "ghcr.io",
+			blockList:   "",
+			want:        true,
+			description: "all registries are case-insensitive (GHCR.IO matches ghcr.io)",
 		},
 	}
 

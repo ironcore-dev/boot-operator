@@ -57,6 +57,15 @@ func ParseImageReference(image string) (imageName, imageVersion string, err erro
 	return imageName, imageVersion, nil
 }
 
+// BuildImageReference constructs a properly formatted OCI image reference from name and version.
+// Uses @ separator for digest-based references (sha256:..., sha512:...) and : for tags.
+func BuildImageReference(imageName, imageVersion string) string {
+	if strings.HasPrefix(imageVersion, "sha256:") || strings.HasPrefix(imageVersion, "sha512:") {
+		return fmt.Sprintf("%s@%s", imageName, imageVersion)
+	}
+	return fmt.Sprintf("%s:%s", imageName, imageVersion)
+}
+
 // FindManifestByArchitecture navigates an OCI image index to find the manifest for a specific architecture.
 // If enableCNAMECompat is true, it first tries to find manifests using the legacy CNAME annotation approach.
 // Returns the architecture-specific manifest, or an error if not found.

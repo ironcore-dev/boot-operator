@@ -285,7 +285,7 @@ func handleDockerRegistry(w http.ResponseWriter, r *http.Request, imageDetails *
 
 	proxy := &httputil.ReverseProxy{
 		Director:       buildDirector(proxyURL, authToken, repository, digest),
-		ModifyResponse: buildModifyResponse(authToken),
+		ModifyResponse: buildModifyResponse(),
 	}
 
 	r.URL.Host = proxyURL.Host
@@ -307,7 +307,7 @@ func buildDirector(proxyURL *url.URL, bearerToken string, repository string, dig
 	}
 }
 
-func buildModifyResponse(bearerToken string) func(*http.Response) error {
+func buildModifyResponse() func(*http.Response) error {
 	return func(resp *http.Response) error {
 		if resp.StatusCode == http.StatusTemporaryRedirect {
 			location, err := resp.Location()

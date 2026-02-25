@@ -46,12 +46,15 @@ func ExtractRegistryDomain(imageRef string) string {
 }
 
 // normalizeDockerHubDomain normalizes Docker Hub domain variants to canonical form.
+// All registry domains are converted to lowercase for case-insensitive comparison,
+// as DNS/domain names are case-insensitive by specification.
 func normalizeDockerHubDomain(domain string) string {
-	switch domain {
+	lowerDomain := strings.ToLower(domain)
+	switch lowerDomain {
 	case "docker.io", "index.docker.io", DefaultRegistry:
 		return "docker.io"
 	default:
-		return domain
+		return lowerDomain
 	}
 }
 

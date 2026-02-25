@@ -224,7 +224,7 @@ func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx con
 }
 
 func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest(ctx context.Context, imageName, imageVersion string) (string, string, string, error) {
-	imageRef := fmt.Sprintf("%s:%s", imageName, imageVersion)
+	imageRef := BuildImageReference(imageName, imageVersion)
 	if err := r.RegistryValidator.ValidateImageRegistry(imageRef); err != nil {
 		return "", "", "", fmt.Errorf("registry validation failed: %w", err)
 	}

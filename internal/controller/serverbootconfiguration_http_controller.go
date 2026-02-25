@@ -203,7 +203,7 @@ func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(ctx context.Cont
 }
 
 func (r *ServerBootConfigurationHTTPReconciler) getUKIDigestFromNestedManifest(ctx context.Context, imageName, imageVersion string) (string, error) {
-	imageRef := fmt.Sprintf("%s:%s", imageName, imageVersion)
+	imageRef := BuildImageReference(imageName, imageVersion)
 	if err := r.RegistryValidator.ValidateImageRegistry(imageRef); err != nil {
 		return "", fmt.Errorf("registry validation failed: %w", err)
 	}
