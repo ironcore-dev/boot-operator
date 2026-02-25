@@ -150,14 +150,11 @@ func TestIsRegistryAllowed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.allowList != "" {
-				t.Setenv("ALLOWED_REGISTRIES", tt.allowList)
-			}
-			if tt.blockList != "" {
-				t.Setenv("BLOCKED_REGISTRIES", tt.blockList)
-			}
+			t.Setenv("ALLOWED_REGISTRIES", tt.allowList)
+			t.Setenv("BLOCKED_REGISTRIES", tt.blockList)
 
-			got := IsRegistryAllowed(tt.registry)
+			v := NewValidator()
+			got := v.IsRegistryAllowed(tt.registry)
 			if got != tt.want {
 				t.Errorf("IsRegistryAllowed(%q) = %v, want %v (%s)", tt.registry, got, tt.want, tt.description)
 			}
@@ -249,14 +246,11 @@ func TestValidateImageRegistry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.allowList != "" {
-				t.Setenv("ALLOWED_REGISTRIES", tt.allowList)
-			}
-			if tt.blockList != "" {
-				t.Setenv("BLOCKED_REGISTRIES", tt.blockList)
-			}
+			t.Setenv("ALLOWED_REGISTRIES", tt.allowList)
+			t.Setenv("BLOCKED_REGISTRIES", tt.blockList)
 
-			err := ValidateImageRegistry(tt.imageRef)
+			v := NewValidator()
+			err := v.ValidateImageRegistry(tt.imageRef)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateImageRegistry(%q) error = %v, wantErr %v (%s)", tt.imageRef, err, tt.wantErr, tt.description)
 				return

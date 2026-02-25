@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/boot-operator/internal/registry"
@@ -30,7 +31,6 @@ type AuthMethod int
 
 const (
 	AuthNone   AuthMethod = iota // Anonymous access
-	AuthBasic                    // Basic username:password
 	AuthBearer                   // Bearer token via /token endpoint
 )
 
@@ -38,7 +38,6 @@ type RegistryInfo struct {
 	Domain     string
 	AuthMethod AuthMethod
 	TokenURL   string // For bearer token auth
-	Realm      string // For basic auth
 }
 
 type TokenResponse struct {
@@ -97,7 +96,10 @@ func extractTokenURL(authHeader, repository string) string {
 func detectRegistryAuth(registryDomain, repository string) (*RegistryInfo, error) {
 	// Try GET /v2/ - standard registry probe endpoint
 	targetURL := fmt.Sprintf("https://%s/v2/", registryDomain)
-	resp, err := http.Get(targetURL)
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	resp, err := client.Get(targetURL)
 	if err != nil {
 		return nil, fmt.Errorf("registry unreachable: %w", err)
 	}
@@ -124,12 +126,6 @@ func detectRegistryAuth(registryDomain, repository string) (*RegistryInfo, error
 			return info, nil
 		}
 
-		if strings.HasPrefix(authHeader, "Basic ") {
-			info.AuthMethod = AuthBasic
-			info.Realm = extractParam(authHeader, "realm")
-			return info, nil
-		}
-
 		return nil, fmt.Errorf("unsupported auth: %s", authHeader)
 
 	default:
@@ -139,7 +135,8 @@ func detectRegistryAuth(registryDomain, repository string) (*RegistryInfo, error
 
 // Get or detect registry info with caching
 func getOrDetectRegistry(registry, repository string) (*RegistryInfo, error) {
-	cacheKey := registry
+	// Cache key includes repository for per-repository auth granularity
+	cacheKey := fmt.Sprintf("%s/%s", registry, repository)
 
 	registryCacheMutex.RLock()
 	if info, exists := registryCache[cacheKey]; exists {
@@ -163,7 +160,10 @@ func getOrDetectRegistry(registry, repository string) (*RegistryInfo, error) {
 
 // Get bearer token from token URL
 func getBearerToken(tokenURL string) (string, error) {
-	resp, err := http.Get(tokenURL)
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+	resp, err := client.Get(tokenURL)
 	if err != nil {
 		return "", err
 	}
@@ -182,7 +182,7 @@ func getBearerToken(tokenURL string) (string, error) {
 	return tokenResponse.Token, nil
 }
 
-func RunImageProxyServer(imageProxyServerAddr string, k8sClient client.Client, log logr.Logger) {
+func RunImageProxyServer(imageProxyServerAddr string, k8sClient client.Client, validator *registry.Validator, log logr.Logger) {
 	http.HandleFunc("/image", func(w http.ResponseWriter, r *http.Request) {
 		imageDetails, err := parseImageURL(r.URL.Query())
 		if err != nil {
@@ -191,7 +191,7 @@ func RunImageProxyServer(imageProxyServerAddr string, k8sClient client.Client, l
 			return
 		}
 
-		handleDockerRegistry(w, r, &imageDetails, log)
+		handleDockerRegistry(w, r, &imageDetails, validator, log)
 	})
 
 	http.HandleFunc("/httpboot/", func(w http.ResponseWriter, r *http.Request) {
@@ -204,7 +204,7 @@ func RunImageProxyServer(imageProxyServerAddr string, k8sClient client.Client, l
 			return
 		}
 
-		handleDockerRegistry(w, r, &imageDetails, log)
+		handleDockerRegistry(w, r, &imageDetails, validator, log)
 	})
 
 	log.Info("Starting image proxy server", "address", imageProxyServerAddr)
@@ -243,13 +243,13 @@ func parseHttpBootImagePath(path string) (ImageDetails, error) {
 	}, nil
 }
 
-func handleDockerRegistry(w http.ResponseWriter, r *http.Request, imageDetails *ImageDetails, log logr.Logger) {
+func handleDockerRegistry(w http.ResponseWriter, r *http.Request, imageDetails *ImageDetails, validator *registry.Validator, log logr.Logger) {
 	registryDomain := imageDetails.RegistryDomain
 	repository := imageDetails.RepositoryName
 
 	log.V(1).Info("Processing registry request", "registry", registryDomain, "repository", repository, "digest", imageDetails.LayerDigest)
 
-	if !registry.IsRegistryAllowed(registryDomain) {
+	if !validator.IsRegistryAllowed(registryDomain) {
 		http.Error(w, "Forbidden: Registry not allowed", http.StatusForbidden)
 		log.Info("Registry blocked", "registry", registryDomain, "allowList", os.Getenv("ALLOWED_REGISTRIES"), "blockList", os.Getenv("BLOCKED_REGISTRIES"))
 		return
@@ -274,11 +274,6 @@ func handleDockerRegistry(w http.ResponseWriter, r *http.Request, imageDetails *
 			return
 		}
 		log.V(1).Info("Obtained bearer token", "registry", registryDomain)
-	case AuthBasic:
-		// TODO: Support basic auth with credentials from secrets
-		http.Error(w, "Basic auth not yet implemented", http.StatusNotImplemented)
-		log.Info("Basic auth required but not yet supported", "registry", registryDomain)
-		return
 	case AuthNone:
 		log.V(1).Info("Registry allows anonymous access", "registry", registryDomain)
 	}
@@ -314,17 +309,15 @@ func buildDirector(proxyURL *url.URL, bearerToken string, repository string, dig
 
 func buildModifyResponse(bearerToken string) func(*http.Response) error {
 	return func(resp *http.Response) error {
-		if bearerToken != "" {
-			resp.Header.Set("Authorization", "Bearer "+bearerToken)
-		}
-
 		if resp.StatusCode == http.StatusTemporaryRedirect {
 			location, err := resp.Location()
 			if err != nil {
 				return err
 			}
 
-			client := &http.Client{}
+			client := &http.Client{
+				Timeout: 30 * time.Second,
+			}
 			redirectReq, err := http.NewRequest("GET", location.String(), nil)
 			if err != nil {
 				return err

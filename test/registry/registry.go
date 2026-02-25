@@ -15,12 +15,19 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
+// OCI media types for boot components
 const (
-	MediaTypeKernel    = "application/vnd.ironcore.image.kernel"
-	MediaTypeInitrd    = "application/vnd.ironcore.image.initramfs"
-	MediaTypeSquashfs  = "application/vnd.ironcore.image.squashfs"
-	MediaTypeUKI       = "application/vnd.ironcore.image.uki"
+	// MediaTypeKernel represents the Linux kernel image media type
+	MediaTypeKernel = "application/vnd.ironcore.image.kernel"
+	// MediaTypeInitrd represents the initial ramdisk media type
+	MediaTypeInitrd = "application/vnd.ironcore.image.initramfs"
+	// MediaTypeSquashfs represents the SquashFS filesystem media type
+	MediaTypeSquashfs = "application/vnd.ironcore.image.squashfs"
+	// MediaTypeUKI represents the unified kernel image media type
+	MediaTypeUKI = "application/vnd.ironcore.image.uki"
+	// MediaTypeKernelOld represents the legacy kernel media type
 	MediaTypeKernelOld = "application/io.gardenlinux.kernel"
+	// MediaTypeInitrdOld represents the legacy initrd media type
 	MediaTypeInitrdOld = "application/io.gardenlinux.initrd"
 )
 

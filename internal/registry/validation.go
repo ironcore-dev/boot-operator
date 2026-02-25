@@ -9,6 +9,11 @@ import (
 	"strings"
 )
 
+const (
+	// DefaultRegistry is the default Docker Hub registry domain
+	DefaultRegistry = "registry-1.docker.io"
+)
+
 // Validator provides registry validation with cached environment variables.
 type Validator struct {
 	allowedRegistries string
@@ -28,7 +33,7 @@ func NewValidator() *Validator {
 func ExtractRegistryDomain(imageRef string) string {
 	parts := strings.SplitN(imageRef, "/", 2)
 	if len(parts) < 2 {
-		return "registry-1.docker.io"
+		return DefaultRegistry
 	}
 
 	potentialRegistry := parts[0]
@@ -37,7 +42,17 @@ func ExtractRegistryDomain(imageRef string) string {
 		return potentialRegistry
 	}
 
-	return "registry-1.docker.io"
+	return DefaultRegistry
+}
+
+// normalizeDockerHubDomain normalizes Docker Hub domain variants to canonical form.
+func normalizeDockerHubDomain(domain string) string {
+	switch domain {
+	case "docker.io", "index.docker.io", DefaultRegistry:
+		return "docker.io"
+	default:
+		return domain
+	}
 }
 
 // isInList checks if a value is in a comma-separated list (exact match only).
@@ -46,9 +61,13 @@ func isInList(registry string, list string) bool {
 		return false
 	}
 
+	// Normalize the registry domain for comparison
+	normalizedRegistry := normalizeDockerHubDomain(registry)
+
 	items := strings.Split(list, ",")
 	for _, item := range items {
-		if strings.TrimSpace(item) == registry {
+		normalizedItem := normalizeDockerHubDomain(strings.TrimSpace(item))
+		if normalizedItem == normalizedRegistry {
 			return true
 		}
 	}
@@ -80,18 +99,4 @@ func (v *Validator) ValidateImageRegistry(imageRef string) error {
 		return fmt.Errorf("registry not allowed: %s (no ALLOWED_REGISTRIES or BLOCKED_REGISTRIES configured, denying all)", registry)
 	}
 	return nil
-}
-
-// Package-level functions for backward compatibility (deprecated - use Validator instead)
-
-// IsRegistryAllowed checks if a registry is allowed (deprecated: use Validator.IsRegistryAllowed).
-func IsRegistryAllowed(registry string) bool {
-	v := NewValidator()
-	return v.IsRegistryAllowed(registry)
-}
-
-// ValidateImageRegistry validates that an image reference uses an allowed registry (deprecated: use Validator.ValidateImageRegistry).
-func ValidateImageRegistry(imageRef string) error {
-	v := NewValidator()
-	return v.ValidateImageRegistry(imageRef)
 }

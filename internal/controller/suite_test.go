@@ -165,6 +165,7 @@ func SetupTest() *corev1.Namespace {
 			Client:            k8sManager.GetClient(),
 			Scheme:            k8sManager.GetScheme(),
 			ImageServerURL:    "http://localhost:5000/httpboot",
+			Architecture:      runtime.GOARCH,
 			RegistryValidator: registryValidator,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 

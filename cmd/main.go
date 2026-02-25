@@ -318,7 +318,7 @@ func main() {
 	}()
 
 	setupLog.Info("starting image-proxy-server")
-	go bootserver.RunImageProxyServer(imageProxyServerAddr, mgr.GetClient(), serverLog.WithName("imageproxyserver"))
+	go bootserver.RunImageProxyServer(imageProxyServerAddr, mgr.GetClient(), registryValidator, serverLog.WithName("imageproxyserver"))
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctx); err != nil {

@@ -20,8 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -40,9 +38,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 const (
@@ -206,30 +202,14 @@ func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx con
 		return nil, err
 	}
 
-	systemIPs := make([]string, 0, len(server.Status.NetworkInterfaces))
-	for _, nic := range server.Status.NetworkInterfaces {
-		if len(nic.IPs) > 0 {
-			for _, ip := range nic.IPs {
-				systemIPs = append(systemIPs, ip.String())
-			}
-			continue
-		}
-		if nic.IP != nil && !nic.IP.IsZero() {
-			systemIPs = append(systemIPs, nic.IP.String())
-		}
-	}
-
-	return systemIPs, nil
+	return ExtractServerNetworkIDs(server, false), nil
 }
 
 func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
-	// Parse image reference - split on last ':' to handle registry:port/image:tag format
-	lastColon := strings.LastIndex(config.Spec.Image, ":")
-	if lastColon == -1 {
-		return "", "", "", fmt.Errorf("invalid image format: missing tag")
+	imageName, imageVersion, err := ParseImageReference(config.Spec.Image)
+	if err != nil {
+		return "", "", "", err
 	}
-	imageName := config.Spec.Image[:lastColon]
-	imageVersion := config.Spec.Image[lastColon+1:]
 
 	kernelDigest, initrdDigest, squashFSDigest, err := r.getLayerDigestsFromNestedManifest(ctx, imageName, imageVersion)
 	if err != nil {
@@ -245,10 +225,8 @@ func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx con
 
 func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest(ctx context.Context, imageName, imageVersion string) (string, string, string, error) {
 	imageRef := fmt.Sprintf("%s:%s", imageName, imageVersion)
-	if r.RegistryValidator != nil {
-		if err := r.RegistryValidator.ValidateImageRegistry(imageRef); err != nil {
-			return "", "", "", fmt.Errorf("registry validation failed: %w", err)
-		}
+	if err := r.RegistryValidator.ValidateImageRegistry(imageRef); err != nil {
+		return "", "", "", fmt.Errorf("registry validation failed: %w", err)
 	}
 
 	resolver := docker.NewResolver(docker.ResolverOptions{})
@@ -257,60 +235,9 @@ func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest
 		return "", "", "", fmt.Errorf("failed to resolve image reference: %w", err)
 	}
 
-	manifestData, err := fetchContent(ctx, resolver, name, desc)
+	manifest, err := FindManifestByArchitecture(ctx, resolver, name, desc, r.Architecture, true)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to fetch manifest data: %w", err)
-	}
-
-	var manifest ocispec.Manifest
-	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		return "", "", "", fmt.Errorf("failed to unmarshal index manifest: %w", err)
-	}
-
-	if desc.MediaType == ocispec.MediaTypeImageIndex {
-		var targetManifestDesc ocispec.Descriptor
-		var indexManifest ocispec.Index
-		if err := json.Unmarshal(manifestData, &indexManifest); err != nil {
-			return "", "", "", fmt.Errorf("failed to unmarshal index manifest: %w", err)
-		}
-
-		// Backward compatibility for CNAME prefix based OCI
-		// TODO: To be removed later
-		for _, manifest := range indexManifest.Manifests {
-			if strings.HasPrefix(manifest.Annotations["cname"], CNAMEPrefixMetalPXE) {
-				if manifest.Annotations["architecture"] == r.Architecture {
-					targetManifestDesc = manifest
-					break
-				}
-			}
-		}
-
-		if targetManifestDesc.Digest == "" {
-			for _, manifest := range indexManifest.Manifests {
-				platform := manifest.Platform
-				if manifest.Platform != nil {
-					if platform.Architecture == r.Architecture {
-						targetManifestDesc = manifest
-						break
-					}
-				}
-			}
-		}
-
-		if targetManifestDesc.Digest == "" {
-			return "", "", "", fmt.Errorf("failed to find target manifest with architecture %s", r.Architecture)
-		}
-
-		nestedData, err := fetchContent(ctx, resolver, name, targetManifestDesc)
-		if err != nil {
-			return "", "", "", fmt.Errorf("failed to fetch nested manifest: %w", err)
-		}
-
-		var nestedManifest ocispec.Manifest
-		if err := json.Unmarshal(nestedData, &nestedManifest); err != nil {
-			return "", "", "", fmt.Errorf("failed to unmarshal nested manifest: %w", err)
-		}
-		manifest = nestedManifest
+		return "", "", "", err
 	}
 
 	var kernelDigest, initrdDigest, squashFSDigest string
@@ -338,61 +265,8 @@ func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest
 	return kernelDigest, initrdDigest, squashFSDigest, nil
 }
 
-func fetchContent(ctx context.Context, resolver remotes.Resolver, ref string, desc ocispec.Descriptor) ([]byte, error) {
-	fetcher, err := resolver.Fetcher(ctx, ref)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get fetcher: %w", err)
-	}
-
-	reader, err := fetcher.Fetch(ctx, desc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch content: %w", err)
-	}
-
-	defer func() {
-		if cerr := reader.Close(); cerr != nil {
-			fmt.Printf("failed to close reader: %v\n", cerr)
-		}
-	}()
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read content: %w", err)
-	}
-
-	if int64(len(data)) != desc.Size {
-		return nil, fmt.Errorf("size mismatch: expected %d, got %d", desc.Size, len(data))
-	}
-
-	return data, nil
-}
-
 func (r *ServerBootConfigurationPXEReconciler) enqueueServerBootConfigFromIgnitionSecret(ctx context.Context, secret client.Object) []reconcile.Request {
-	log := ctrl.LoggerFrom(ctx)
-	secretObj, ok := secret.(*corev1.Secret)
-	if !ok {
-		log.Error(nil, "can't decode object into Secret", secret)
-		return nil
-	}
-
-	bootConfigList := &metalv1alpha1.ServerBootConfigurationList{}
-	if err := r.List(ctx, bootConfigList, client.InNamespace(secretObj.Namespace)); err != nil {
-		log.Error(err, "failed to list ServerBootConfiguration for Secret", "Secret", client.ObjectKeyFromObject(secretObj))
-		return nil
-	}
-
-	var requests []reconcile.Request
-	for _, bootConfig := range bootConfigList.Items {
-		if bootConfig.Spec.IgnitionSecretRef != nil && bootConfig.Spec.IgnitionSecretRef.Name == secretObj.Name {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      bootConfig.Name,
-					Namespace: bootConfig.Namespace,
-				},
-			})
-		}
-	}
-	return requests
+	return EnqueueServerBootConfigsReferencingSecret(ctx, r.Client, secret)
 }
 
 // SetupWithManager sets up the controller with the Manager.
