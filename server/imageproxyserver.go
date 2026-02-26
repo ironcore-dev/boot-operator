@@ -70,6 +70,12 @@ const (
 	// registryCacheTTL defines how long registry auth info is cached
 	// After this duration, auth detection will be re-run to catch policy changes
 	registryCacheTTL = 15 * time.Minute
+
+	// maxErrorResponseSize limits error response body reads to prevent memory exhaustion
+	maxErrorResponseSize = 4 * 1024 // 4KB - enough for error details
+
+	// maxTokenResponseSize limits token response body reads to prevent memory exhaustion
+	maxTokenResponseSize = 64 * 1024 // 64KB - token responses are typically a few hundred bytes
 )
 
 // Shared HTTP client for all registry operations to enable connection reuse
@@ -194,11 +200,15 @@ func getBearerToken(tokenURL string) (string, error) {
 
 	// Check HTTP status before attempting to parse JSON
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		// Limit error response body read to prevent memory exhaustion
+		limitedReader := io.LimitReader(resp.Body, maxErrorResponseSize)
+		body, _ := io.ReadAll(limitedReader)
 		return "", fmt.Errorf("token request failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	// Limit token response body read to prevent memory exhaustion
+	limitedReader := io.LimitReader(resp.Body, maxTokenResponseSize)
+	body, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return "", err
 	}
@@ -395,7 +405,8 @@ func buildModifyResponse() func(*http.Response) error {
 				return err
 			}
 
-			redirectReq, err := http.NewRequest("GET", location.String(), nil)
+			// Propagate original request context to enable cancellation on client disconnect
+			redirectReq, err := http.NewRequestWithContext(resp.Request.Context(), "GET", location.String(), nil)
 			if err != nil {
 				return err
 			}
