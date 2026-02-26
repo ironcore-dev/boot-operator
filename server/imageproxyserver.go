@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/distribution/reference"
 	"github.com/go-logr/logr"
 	"github.com/ironcore-dev/boot-operator/internal/registry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,8 +41,11 @@ type RegistryInfo struct {
 	TokenURL   string // For bearer token auth
 }
 
+// TokenResponse represents the JSON response from an OCI registry token endpoint.
+// Supports both Docker registry format (token) and OAuth2 format (access_token).
 type TokenResponse struct {
-	Token string `json:"token"`
+	Token       string `json:"token"`        // Docker registry format
+	AccessToken string `json:"access_token"` // OAuth2 format (takes precedence)
 }
 
 type ImageDetails struct {
@@ -52,9 +56,21 @@ type ImageDetails struct {
 	Version        string
 }
 
+// registryCacheEntry holds registry info with expiration timestamp
+type registryCacheEntry struct {
+	info      *RegistryInfo
+	expiresAt time.Time
+}
+
 // Cache registry info to avoid repeated probes
-var registryCache = make(map[string]*RegistryInfo)
+var registryCache = make(map[string]*registryCacheEntry)
 var registryCacheMutex sync.RWMutex
+
+const (
+	// registryCacheTTL defines how long registry auth info is cached
+	// After this duration, auth detection will be re-run to catch policy changes
+	registryCacheTTL = 15 * time.Minute
+)
 
 // Shared HTTP client for all registry operations to enable connection reuse
 var httpClient = &http.Client{
@@ -65,11 +81,6 @@ var httpClient = &http.Client{
 		TLSHandshakeTimeout:   10 * time.Second, // Security timeout
 		ExpectContinueTimeout: 1 * time.Second,  // Reduce latency
 	},
-}
-
-// Extract repository path without registry
-func extractRepository(imageRef, registryDomain string) string {
-	return strings.TrimPrefix(imageRef, registryDomain+"/")
 }
 
 // Parse WWW-Authenticate parameter value
@@ -128,7 +139,8 @@ func detectRegistryAuth(registryDomain, repository string) (*RegistryInfo, error
 			return nil, fmt.Errorf("401 without WWW-Authenticate header")
 		}
 
-		if strings.HasPrefix(authHeader, "Bearer ") {
+		// HTTP auth scheme matching is case-insensitive per RFC 7235
+		if len(authHeader) > 7 && strings.EqualFold(authHeader[:7], "bearer ") {
 			info.AuthMethod = AuthBearer
 			info.TokenURL = extractTokenURL(authHeader, repository)
 			return info, nil
@@ -141,26 +153,32 @@ func detectRegistryAuth(registryDomain, repository string) (*RegistryInfo, error
 	}
 }
 
-// Get or detect registry info with caching
+// Get or detect registry info with caching and TTL-based expiration
 func getOrDetectRegistry(registry, repository string) (*RegistryInfo, error) {
 	// Cache key includes repository for per-repository auth granularity
 	cacheKey := fmt.Sprintf("%s/%s", registry, repository)
 
 	registryCacheMutex.RLock()
-	if info, exists := registryCache[cacheKey]; exists {
-		registryCacheMutex.RUnlock()
-		return info, nil
+	if entry, exists := registryCache[cacheKey]; exists {
+		// Check if entry has expired
+		if time.Now().Before(entry.expiresAt) {
+			registryCacheMutex.RUnlock()
+			return entry.info, nil
+		}
 	}
 	registryCacheMutex.RUnlock()
 
-	// Detect and cache
+	// Detect and cache with TTL
 	info, err := detectRegistryAuth(registry, repository)
 	if err != nil {
 		return nil, err
 	}
 
 	registryCacheMutex.Lock()
-	registryCache[cacheKey] = info
+	registryCache[cacheKey] = &registryCacheEntry{
+		info:      info,
+		expiresAt: time.Now().Add(registryCacheTTL),
+	}
 	registryCacheMutex.Unlock()
 
 	return info, nil
@@ -174,6 +192,12 @@ func getBearerToken(tokenURL string) (string, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	// Check HTTP status before attempting to parse JSON
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("token request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
@@ -181,13 +205,53 @@ func getBearerToken(tokenURL string) (string, error) {
 
 	var tokenResponse TokenResponse
 	if err := json.Unmarshal(body, &tokenResponse); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to parse token response: %w", err)
 	}
 
-	return tokenResponse.Token, nil
+	// Prefer access_token (OAuth2 standard) over token (Docker registry format)
+	if tokenResponse.AccessToken != "" {
+		return tokenResponse.AccessToken, nil
+	}
+	if tokenResponse.Token != "" {
+		return tokenResponse.Token, nil
+	}
+
+	return "", fmt.Errorf("token response missing both 'token' and 'access_token' fields")
+}
+
+// cleanupExpiredCacheEntries periodically removes expired entries from the registry cache
+// to prevent unbounded memory growth. Runs every 5 minutes.
+func cleanupExpiredCacheEntries(log logr.Logger) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		now := time.Now()
+		registryCacheMutex.Lock()
+
+		expiredKeys := make([]string, 0)
+		for key, entry := range registryCache {
+			if now.After(entry.expiresAt) {
+				expiredKeys = append(expiredKeys, key)
+			}
+		}
+
+		for _, key := range expiredKeys {
+			delete(registryCache, key)
+		}
+
+		registryCacheMutex.Unlock()
+
+		if len(expiredKeys) > 0 {
+			log.V(1).Info("Cleaned up expired cache entries", "count", len(expiredKeys), "remainingEntries", len(registryCache))
+		}
+	}
 }
 
 func RunImageProxyServer(imageProxyServerAddr string, k8sClient client.Client, validator *registry.Validator, log logr.Logger) {
+	// Start background cleanup of expired cache entries
+	go cleanupExpiredCacheEntries(log)
+
 	http.HandleFunc("/image", func(w http.ResponseWriter, r *http.Request) {
 		imageDetails, err := parseImageURL(r.URL.Query())
 		if err != nil {
@@ -229,9 +293,13 @@ func parseHttpBootImagePath(path string) (ImageDetails, error) {
 	imageName := strings.Join(segments[:len(segments)-1], "/")
 	digestSegment := segments[len(segments)-1]
 
-	// Extract registry domain and repository
+	// Extract registry domain and repository using distribution/reference
 	registryDomain := registry.ExtractRegistryDomain(imageName)
-	repositoryName := extractRepository(imageName, registryDomain)
+	named, err := reference.ParseNormalizedNamed(imageName)
+	if err != nil {
+		return ImageDetails{}, fmt.Errorf("invalid image reference: %w", err)
+	}
+	repositoryName := reference.Path(named)
 
 	digestSegment = strings.TrimSuffix(digestSegment, ".efi")
 
@@ -413,6 +481,10 @@ func replaceResponse(originalResp, redirectResp *http.Response) {
 			originalResp.Header.Add(name, value) // Add all values
 		}
 	}
+	// Close the original body to prevent connection leaks
+	if originalResp.Body != nil {
+		_ = originalResp.Body.Close()
+	}
 	originalResp.Body = redirectResp.Body
 	originalResp.StatusCode = redirectResp.StatusCode
 }
@@ -428,9 +500,13 @@ func parseImageURL(queries url.Values) (imageDetails ImageDetails, err error) {
 
 	ociImageName = strings.TrimSuffix(ociImageName, ".efi")
 
-	// Extract registry domain and repository
+	// Extract registry domain and repository using distribution/reference
 	registryDomain := registry.ExtractRegistryDomain(ociImageName)
-	repositoryName := extractRepository(ociImageName, registryDomain)
+	named, err := reference.ParseNormalizedNamed(ociImageName)
+	if err != nil {
+		return ImageDetails{}, fmt.Errorf("invalid image reference: %w", err)
+	}
+	repositoryName := reference.Path(named)
 
 	return ImageDetails{
 		OCIImageName:   ociImageName,
