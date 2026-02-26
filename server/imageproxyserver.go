@@ -56,6 +56,17 @@ type ImageDetails struct {
 var registryCache = make(map[string]*RegistryInfo)
 var registryCacheMutex sync.RWMutex
 
+// Shared HTTP client for all registry operations to enable connection reuse
+var httpClient = &http.Client{
+	Timeout: 30 * time.Second,
+	Transport: &http.Transport{
+		MaxIdleConnsPerHost:   10,               // Connection pool per host
+		IdleConnTimeout:       90 * time.Second, // Keep-alive duration
+		TLSHandshakeTimeout:   10 * time.Second, // Security timeout
+		ExpectContinueTimeout: 1 * time.Second,  // Reduce latency
+	},
+}
+
 // Extract repository path without registry
 func extractRepository(imageRef, registryDomain string) string {
 	return strings.TrimPrefix(imageRef, registryDomain+"/")
@@ -96,10 +107,7 @@ func extractTokenURL(authHeader, repository string) string {
 func detectRegistryAuth(registryDomain, repository string) (*RegistryInfo, error) {
 	// Try GET /v2/ - standard registry probe endpoint
 	targetURL := fmt.Sprintf("https://%s/v2/", registryDomain)
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-	resp, err := client.Get(targetURL)
+	resp, err := httpClient.Get(targetURL)
 	if err != nil {
 		return nil, fmt.Errorf("registry unreachable: %w", err)
 	}
@@ -160,10 +168,7 @@ func getOrDetectRegistry(registry, repository string) (*RegistryInfo, error) {
 
 // Get bearer token from token URL
 func getBearerToken(tokenURL string) (string, error) {
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
-	resp, err := client.Get(tokenURL)
+	resp, err := httpClient.Get(tokenURL)
 	if err != nil {
 		return "", err
 	}
@@ -280,8 +285,11 @@ func handleDockerRegistry(w http.ResponseWriter, r *http.Request, imageDetails *
 
 	// Proxy the blob request
 	digest := imageDetails.LayerDigest
-	targetURL := fmt.Sprintf("https://%s/v2/%s/blobs/%s", registryDomain, repository, digest)
-	proxyURL, _ := url.Parse(targetURL)
+	proxyURL := &url.URL{
+		Scheme: "https",
+		Host:   registryDomain,
+		Path:   fmt.Sprintf("/v2/%s/blobs/%s", repository, digest),
+	}
 
 	proxy := &httputil.ReverseProxy{
 		Director:       buildDirector(proxyURL, authToken, repository, digest),
@@ -292,7 +300,7 @@ func handleDockerRegistry(w http.ResponseWriter, r *http.Request, imageDetails *
 	r.URL.Scheme = proxyURL.Scheme
 	r.Host = proxyURL.Host
 
-	log.Info("Proxying registry request", "targetURL", targetURL, "authMethod", registryInfo.AuthMethod)
+	log.Info("Proxying registry request", "targetURL", proxyURL.String(), "authMethod", registryInfo.AuthMethod)
 	proxy.ServeHTTP(w, r)
 }
 
@@ -309,22 +317,33 @@ func buildDirector(proxyURL *url.URL, bearerToken string, repository string, dig
 
 func buildModifyResponse() func(*http.Response) error {
 	return func(resp *http.Response) error {
-		if resp.StatusCode == http.StatusTemporaryRedirect {
+		// Handle redirects (307, 301, 302, 303)
+		if resp.StatusCode == http.StatusTemporaryRedirect ||
+			resp.StatusCode == http.StatusMovedPermanently ||
+			resp.StatusCode == http.StatusFound ||
+			resp.StatusCode == http.StatusSeeOther {
 			location, err := resp.Location()
 			if err != nil {
 				return err
 			}
 
-			client := &http.Client{
-				Timeout: 30 * time.Second,
-			}
 			redirectReq, err := http.NewRequest("GET", location.String(), nil)
 			if err != nil {
 				return err
 			}
-			copyHeaders(resp.Request.Header, redirectReq.Header)
 
-			redirectResp, err := client.Do(redirectReq)
+			// Security: Strip sensitive headers on cross-host redirects to prevent
+			// leaking credentials (e.g., bearer tokens) to third-party CDN/mirrors
+			if isSameHost(resp.Request.URL, location) {
+				// Same-host redirect: preserve all headers including Authorization
+				copyHeaders(resp.Request.Header, redirectReq.Header)
+			} else {
+				// Cross-host redirect: exclude sensitive auth headers
+				copyHeadersExcluding(resp.Request.Header, redirectReq.Header,
+					[]string{"Authorization", "Cookie", "Proxy-Authorization"})
+			}
+
+			redirectResp, err := httpClient.Do(redirectReq)
 			if err != nil {
 				return err
 			}
@@ -358,10 +377,40 @@ func copyHeaders(source http.Header, destination http.Header) {
 	}
 }
 
+// copyHeadersExcluding copies headers from source to destination, excluding specified headers.
+// Header name comparison is case-insensitive per HTTP specification.
+func copyHeadersExcluding(source http.Header, destination http.Header, excludeHeaders []string) {
+	// Normalize excluded headers to lowercase for case-insensitive comparison
+	excludeMap := make(map[string]bool, len(excludeHeaders))
+	for _, header := range excludeHeaders {
+		excludeMap[strings.ToLower(header)] = true
+	}
+
+	for name, values := range source {
+		if !excludeMap[strings.ToLower(name)] {
+			for _, value := range values {
+				destination.Add(name, value)
+			}
+		}
+	}
+}
+
+// isSameHost compares two URLs to determine if they point to the same host.
+// Comparison includes both hostname and port to prevent credential leakage across ports.
+func isSameHost(url1, url2 *url.URL) bool {
+	if url1 == nil || url2 == nil {
+		return false
+	}
+	// URL.Host includes port if specified, e.g., "registry.io:443"
+	return strings.EqualFold(url1.Host, url2.Host)
+}
+
 func replaceResponse(originalResp, redirectResp *http.Response) {
+	// Preserve all values for multi-valued headers (e.g., Set-Cookie)
 	for name, values := range redirectResp.Header {
+		originalResp.Header.Del(name) // Clear existing values first
 		for _, value := range values {
-			originalResp.Header.Set(name, value)
+			originalResp.Header.Add(name, value) // Add all values
 		}
 	}
 	originalResp.Body = redirectResp.Body
