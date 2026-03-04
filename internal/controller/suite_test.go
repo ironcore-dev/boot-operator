@@ -6,7 +6,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -47,10 +46,11 @@ const (
 )
 
 var (
-	cfg          *rest.Config
-	k8sClient    client.Client
-	testEnv      *envtest.Environment
-	mockRegistry *testregistry.MockRegistry
+	cfg               *rest.Config
+	k8sClient         client.Client
+	testEnv           *envtest.Environment
+	mockRegistry      *testregistry.MockRegistry
+	allowedRegistries string
 )
 
 func TestControllers(t *testing.T) {
@@ -75,11 +75,8 @@ var _ = BeforeSuite(func() {
 	Expect(mockRegistry.PushPXEImageOldFormat("gardenlinux/gardenlinux", "1772.0", runtime.GOARCH)).To(Succeed())
 	Expect(mockRegistry.PushHTTPImage("ironcore-dev/os-images/test-image", "100.1")).To(Succeed())
 
-	// Set ALLOWED_REGISTRIES to use mock registry
-	Expect(os.Setenv("ALLOWED_REGISTRIES", mockRegistry.RegistryAddress())).To(Succeed())
-	DeferCleanup(func() {
-		Expect(os.Unsetenv("ALLOWED_REGISTRIES")).To(Succeed())
-	})
+	// Set allowed registries to use mock registry
+	allowedRegistries = mockRegistry.RegistryAddress()
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -151,7 +148,7 @@ func SetupTest() *corev1.Namespace {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		registryValidator := registry.NewValidator()
+		registryValidator := registry.NewValidator(allowedRegistries, "")
 
 		Expect((&ServerBootConfigurationPXEReconciler{
 			Client:            k8sManager.GetClient(),

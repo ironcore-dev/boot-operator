@@ -80,6 +80,8 @@ func main() {
 	var ipxeServicePort int
 	var imageServerURL string
 	var architecture string
+	var allowedRegistries string
+	var blockedRegistries string
 
 	flag.StringVar(&architecture, "architecture", "amd64", "Target system architecture (e.g., amd64, arm64)")
 	flag.IntVar(&ipxeServicePort, "ipxe-service-port", 5000, "IPXE Service port to listen on.")
@@ -99,6 +101,8 @@ func main() {
 	flag.BoolVar(&secureMetrics, "metrics-secure", true, "If set the metrics endpoint is served securely")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(&allowedRegistries, "allowed-registries", "", "Comma-separated list of allowed OCI registries. If set, only these registries are permitted.")
+	flag.StringVar(&blockedRegistries, "blocked-registries", "", "Comma-separated list of blocked OCI registries. If set, these registries are denied.")
 
 	controllers := switches.New(
 		// core controllers
@@ -229,8 +233,8 @@ func main() {
 	}
 
 	// Initialize registry validator for OCI image validation
-	registryValidator := registry.NewValidator()
-	setupLog.Info("Initialized registry validator", "allowedRegistries", os.Getenv("ALLOWED_REGISTRIES"), "blockedRegistries", os.Getenv("BLOCKED_REGISTRIES"))
+	registryValidator := registry.NewValidator(allowedRegistries, blockedRegistries)
+	setupLog.Info("Initialized registry validator", "allowedRegistries", allowedRegistries, "blockedRegistries", blockedRegistries)
 
 	if controllers.Enabled(ipxeBootConfigController) {
 		if err = (&controller.IPXEBootConfigReconciler{

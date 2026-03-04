@@ -5,44 +5,47 @@ package registry
 
 import (
 	"fmt"
-	"os"
 	"strings"
+
+	"github.com/distribution/reference"
 )
 
 const (
 	// DefaultRegistry is the default Docker Hub registry domain
 	DefaultRegistry = "registry-1.docker.io"
+	// DockerHubDomain is the canonical short domain for Docker Hub
+	DockerHubDomain = "docker.io"
 )
 
-// Validator provides registry validation with cached environment variables.
+// Validator provides registry validation with configurable allow/block lists.
 type Validator struct {
-	allowedRegistries string
-	blockedRegistries string
+	AllowedRegistries string
+	BlockedRegistries string
 }
 
-// NewValidator creates a new Validator with environment variables cached at initialization.
-// This should be called once at startup to avoid repeated os.Getenv calls.
-func NewValidator() *Validator {
+// NewValidator creates a new Validator with the given allowed and blocked registry lists.
+// Each list is a comma-separated string of registry domains.
+func NewValidator(allowedRegistries, blockedRegistries string) *Validator {
 	return &Validator{
-		allowedRegistries: os.Getenv("ALLOWED_REGISTRIES"),
-		blockedRegistries: os.Getenv("BLOCKED_REGISTRIES"),
+		AllowedRegistries: allowedRegistries,
+		BlockedRegistries: blockedRegistries,
 	}
 }
 
-// ExtractRegistryDomain extracts the registry domain from an OCI image reference.
+// ExtractRegistryDomain extracts the registry domain from an OCI image reference
+// using the canonical Docker reference parser from github.com/distribution/reference.
 func ExtractRegistryDomain(imageRef string) string {
-	parts := strings.SplitN(imageRef, "/", 2)
-	if len(parts) < 2 {
+	named, err := reference.ParseNormalizedNamed(imageRef)
+	if err != nil {
 		return DefaultRegistry
 	}
-
-	potentialRegistry := parts[0]
-
-	if strings.Contains(potentialRegistry, ".") || strings.Contains(potentialRegistry, ":") || potentialRegistry == "localhost" {
-		return potentialRegistry
+	domain := reference.Domain(named)
+	// The reference library normalizes Docker Hub to "docker.io",
+	// but we use "registry-1.docker.io" as our canonical constant.
+	if domain == DockerHubDomain {
+		return DefaultRegistry
 	}
-
-	return DefaultRegistry
+	return domain
 }
 
 // normalizeDockerHubDomain normalizes Docker Hub domain variants to canonical form.
@@ -51,8 +54,8 @@ func ExtractRegistryDomain(imageRef string) string {
 func normalizeDockerHubDomain(domain string) string {
 	lowerDomain := strings.ToLower(domain)
 	switch lowerDomain {
-	case "docker.io", "index.docker.io", DefaultRegistry:
-		return "docker.io"
+	case DockerHubDomain, "index.docker.io", DefaultRegistry:
+		return DockerHubDomain
 	default:
 		return lowerDomain
 	}
@@ -77,14 +80,14 @@ func isInList(registry string, list string) bool {
 	return false
 }
 
-// IsRegistryAllowed checks if a registry is allowed based on the cached allow/block lists.
+// IsRegistryAllowed checks if a registry is allowed based on the allow/block lists.
 func (v *Validator) IsRegistryAllowed(registry string) bool {
-	if v.allowedRegistries != "" {
-		return isInList(registry, v.allowedRegistries)
+	if v.AllowedRegistries != "" {
+		return isInList(registry, v.AllowedRegistries)
 	}
 
-	if v.blockedRegistries != "" {
-		return !isInList(registry, v.blockedRegistries)
+	if v.BlockedRegistries != "" {
+		return !isInList(registry, v.BlockedRegistries)
 	}
 
 	return false
@@ -94,12 +97,12 @@ func (v *Validator) IsRegistryAllowed(registry string) bool {
 func (v *Validator) ValidateImageRegistry(imageRef string) error {
 	registry := ExtractRegistryDomain(imageRef)
 	if !v.IsRegistryAllowed(registry) {
-		if v.allowedRegistries != "" {
-			return fmt.Errorf("registry not allowed: %s (allowed registries: %s)", registry, v.allowedRegistries)
-		} else if v.blockedRegistries != "" {
-			return fmt.Errorf("registry blocked: %s (blocked registries: %s)", registry, v.blockedRegistries)
+		if v.AllowedRegistries != "" {
+			return fmt.Errorf("registry not allowed: %s (allowed registries: %s)", registry, v.AllowedRegistries)
+		} else if v.BlockedRegistries != "" {
+			return fmt.Errorf("registry blocked: %s (blocked registries: %s)", registry, v.BlockedRegistries)
 		}
-		return fmt.Errorf("registry not allowed: %s (no ALLOWED_REGISTRIES or BLOCKED_REGISTRIES configured, denying all)", registry)
+		return fmt.Errorf("registry not allowed: %s (no --allowed-registries or --blocked-registries configured, denying all)", registry)
 	}
 	return nil
 }

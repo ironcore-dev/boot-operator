@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -334,7 +333,7 @@ func handleDockerRegistry(w http.ResponseWriter, r *http.Request, imageDetails *
 
 	if !validator.IsRegistryAllowed(registryDomain) {
 		http.Error(w, "Forbidden: Registry not allowed", http.StatusForbidden)
-		log.Info("Registry blocked", "registry", registryDomain, "allowList", os.Getenv("ALLOWED_REGISTRIES"), "blockList", os.Getenv("BLOCKED_REGISTRIES"))
+		log.Info("Registry blocked", "registry", registryDomain, "allowList", validator.AllowedRegistries, "blockList", validator.BlockedRegistries)
 		return
 	}
 

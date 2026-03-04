@@ -26,7 +26,7 @@ func TestExtractRegistryDomain(t *testing.T) {
 		{
 			name:     "docker hub explicit",
 			imageRef: "docker.io/library/ubuntu:latest",
-			want:     "docker.io",
+			want:     "registry-1.docker.io",
 		},
 		{
 			name:     "docker hub implicit with namespace",
@@ -263,10 +263,7 @@ func TestIsRegistryAllowed(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ALLOWED_REGISTRIES", tt.allowList)
-			t.Setenv("BLOCKED_REGISTRIES", tt.blockList)
-
-			v := NewValidator()
+			v := NewValidator(tt.allowList, tt.blockList)
 			got := v.IsRegistryAllowed(tt.registry)
 			if got != tt.want {
 				t.Errorf("IsRegistryAllowed(%q) = %v, want %v (%s)", tt.registry, got, tt.want, tt.description)
@@ -307,7 +304,7 @@ func TestValidateImageRegistry(t *testing.T) {
 			allowList:   "ghcr.io,keppel.global.cloud.sap",
 			blockList:   "",
 			wantErr:     true,
-			errContains: "registry not allowed: docker.io",
+			errContains: "registry not allowed: registry-1.docker.io",
 			description: "docker.io should be blocked when not in allow list",
 		},
 		{
@@ -334,7 +331,7 @@ func TestValidateImageRegistry(t *testing.T) {
 			allowList:   "",
 			blockList:   "docker.io,registry-1.docker.io",
 			wantErr:     true,
-			errContains: "registry blocked: docker.io",
+			errContains: "registry blocked: registry-1.docker.io",
 			description: "docker.io should be blocked when in block list",
 		},
 		{
@@ -352,17 +349,14 @@ func TestValidateImageRegistry(t *testing.T) {
 			allowList:   "",
 			blockList:   "",
 			wantErr:     true,
-			errContains: "no ALLOWED_REGISTRIES or BLOCKED_REGISTRIES configured",
+			errContains: "no --allowed-registries or --blocked-registries configured",
 			description: "should deny all when no configuration",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv("ALLOWED_REGISTRIES", tt.allowList)
-			t.Setenv("BLOCKED_REGISTRIES", tt.blockList)
-
-			v := NewValidator()
+			v := NewValidator(tt.allowList, tt.blockList)
 			err := v.ValidateImageRegistry(tt.imageRef)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateImageRegistry(%q) error = %v, wantErr %v (%s)", tt.imageRef, err, tt.wantErr, tt.description)
