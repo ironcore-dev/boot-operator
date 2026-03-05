@@ -65,7 +65,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 				ServerRef: corev1.LocalObjectReference{
 					Name: server.Name,
 				},
-				Image:             "ghcr.io/ironcore-dev/os-images/test-image:100.1",
+				Image:             MockImageRef("ironcore-dev/os-images/test-image", "100.1"),
 				IgnitionSecretRef: &corev1.LocalObjectReference{Name: "foo"},
 			},
 		}

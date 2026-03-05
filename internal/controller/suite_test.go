@@ -13,6 +13,7 @@ import (
 
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/config"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/ironcore-dev/controller-utils/modutils"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
@@ -33,6 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	"github.com/ironcore-dev/boot-operator/internal/registry"
+	testregistry "github.com/ironcore-dev/boot-operator/test/registry"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -43,9 +46,11 @@ const (
 )
 
 var (
-	cfg       *rest.Config
-	k8sClient client.Client
-	testEnv   *envtest.Environment
+	cfg               *rest.Config
+	k8sClient         client.Client
+	testEnv           *envtest.Environment
+	mockRegistry      *testregistry.MockRegistry
+	allowedRegistries string
 )
 
 func TestControllers(t *testing.T) {
@@ -60,6 +65,18 @@ func TestControllers(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+
+	By("starting mock OCI registry")
+	mockRegistry = testregistry.NewMockRegistry()
+	DeferCleanup(mockRegistry.Close)
+
+	// Push test images to mock registry (using simple paths without localhost prefix)
+	Expect(mockRegistry.PushPXEImage("ironcore-dev/os-images/gardenlinux", "1877.0", runtime.GOARCH)).To(Succeed())
+	Expect(mockRegistry.PushPXEImageOldFormat("gardenlinux/gardenlinux", "1772.0", runtime.GOARCH)).To(Succeed())
+	Expect(mockRegistry.PushHTTPImage("ironcore-dev/os-images/test-image", "100.1")).To(Succeed())
+
+	// Set allowed registries to use mock registry
+	allowedRegistries = mockRegistry.RegistryAddress()
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
@@ -120,6 +137,9 @@ func SetupTest() *corev1.Namespace {
 
 		k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 			Scheme: scheme.Scheme,
+			Metrics: metricsserver.Options{
+				BindAddress: "0", // Disable metrics server to avoid port 8080 conflicts with Tilt
+			},
 			Controller: config.Controller{
 				// need to skip unique controller name validation
 				// since all tests need a dedicated controller
@@ -128,17 +148,22 @@ func SetupTest() *corev1.Namespace {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
+		registryValidator := registry.NewValidator(allowedRegistries, "")
+
 		Expect((&ServerBootConfigurationPXEReconciler{
-			Client:         k8sManager.GetClient(),
-			Scheme:         k8sManager.GetScheme(),
-			IPXEServiceURL: "http://localhost:5000",
-			Architecture:   "arm64",
+			Client:            k8sManager.GetClient(),
+			Scheme:            k8sManager.GetScheme(),
+			IPXEServiceURL:    "http://localhost:5000",
+			Architecture:      runtime.GOARCH,
+			RegistryValidator: registryValidator,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
 		Expect((&ServerBootConfigurationHTTPReconciler{
-			Client:         k8sManager.GetClient(),
-			Scheme:         k8sManager.GetScheme(),
-			ImageServerURL: "http://localhost:5000/httpboot",
+			Client:            k8sManager.GetClient(),
+			Scheme:            k8sManager.GetScheme(),
+			ImageServerURL:    "http://localhost:5000/httpboot",
+			Architecture:      runtime.GOARCH,
+			RegistryValidator: registryValidator,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
 		go func() {
@@ -148,4 +173,9 @@ func SetupTest() *corev1.Namespace {
 	})
 
 	return ns
+}
+
+// MockImageRef returns a fully qualified image reference for the mock registry
+func MockImageRef(name, tag string) string {
+	return fmt.Sprintf("%s/%s:%s", mockRegistry.RegistryAddress(), name, tag)
 }
