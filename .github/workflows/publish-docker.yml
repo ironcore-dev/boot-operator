@@ -40,7 +40,7 @@ jobs:
       with:
         ref: ${{ github.event.pull_request.head.sha }}
     - name: Collect metadata
-      uses: docker/metadata-action@v5
+      uses: docker/metadata-action@v6
       id: meta
       with:
         images: |
