@@ -92,7 +92,7 @@ var _ = BeforeSuite(func() {
 		// Note that you must have the required binaries setup under the bin directory to perform
 		// the tests directly. When we run make test it will be setup and used automatically.
 		BinaryAssetsDirectory: filepath.Join("..", "..", "bin", "k8s",
-			fmt.Sprintf("1.34.0-%s-%s", runtime.GOOS, runtime.GOARCH)),
+			fmt.Sprintf("1.35.0-%s-%s", runtime.GOOS, runtime.GOARCH)),
 	}
 
 	var err error
@@ -148,7 +148,7 @@ func SetupTest() *corev1.Namespace {
 		})
 		Expect(err).ToNot(HaveOccurred())
 
-		registryValidator := registry.NewValidator(allowedRegistries, "")
+		registryValidator := registry.NewValidator(allowedRegistries)
 
 		Expect((&ServerBootConfigurationPXEReconciler{
 			Client:            k8sManager.GetClient(),

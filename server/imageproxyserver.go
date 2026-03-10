@@ -80,12 +80,16 @@ const (
 // Shared HTTP client for all registry operations to enable connection reuse
 var httpClient = &http.Client{
 	Timeout: 30 * time.Second,
-	Transport: &http.Transport{
-		MaxIdleConnsPerHost:   10,               // Connection pool per host
-		IdleConnTimeout:       90 * time.Second, // Keep-alive duration
-		TLSHandshakeTimeout:   10 * time.Second, // Security timeout
-		ExpectContinueTimeout: 1 * time.Second,  // Reduce latency
-	},
+	Transport: func() *http.Transport {
+		// Clone http.DefaultTransport to inherit proxy settings from environment
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		// Override specific fields for registry operations
+		transport.MaxIdleConnsPerHost = 10                // Connection pool per host
+		transport.IdleConnTimeout = 90 * time.Second      // Keep-alive duration
+		transport.TLSHandshakeTimeout = 10 * time.Second  // Security timeout
+		transport.ExpectContinueTimeout = 1 * time.Second // Reduce latency
+		return transport
+	}(),
 }
 
 // Parse WWW-Authenticate parameter value
@@ -249,10 +253,11 @@ func cleanupExpiredCacheEntries(log logr.Logger) {
 			delete(registryCache, key)
 		}
 
+		remainingCount := len(registryCache)
 		registryCacheMutex.Unlock()
 
 		if len(expiredKeys) > 0 {
-			log.V(1).Info("Cleaned up expired cache entries", "count", len(expiredKeys), "remainingEntries", len(registryCache))
+			log.V(1).Info("Cleaned up expired cache entries", "count", len(expiredKeys), "remainingEntries", remainingCount)
 		}
 	}
 }
@@ -303,7 +308,10 @@ func parseHttpBootImagePath(path string) (ImageDetails, error) {
 	digestSegment := segments[len(segments)-1]
 
 	// Extract registry domain and repository using distribution/reference
-	registryDomain := registry.ExtractRegistryDomain(imageName)
+	registryDomain, err := registry.ExtractRegistryDomain(imageName)
+	if err != nil {
+		return ImageDetails{}, err
+	}
 	named, err := reference.ParseNormalizedNamed(imageName)
 	if err != nil {
 		return ImageDetails{}, fmt.Errorf("invalid image reference: %w", err)
@@ -333,7 +341,7 @@ func handleDockerRegistry(w http.ResponseWriter, r *http.Request, imageDetails *
 
 	if !validator.IsRegistryAllowed(registryDomain) {
 		http.Error(w, "Forbidden: Registry not allowed", http.StatusForbidden)
-		log.Info("Registry blocked", "registry", registryDomain, "allowList", validator.AllowedRegistries, "blockList", validator.BlockedRegistries)
+		log.Info("Registry blocked", "registry", registryDomain, "allowList", validator.AllowedRegistries)
 		return
 	}
 
@@ -411,12 +419,14 @@ func buildModifyResponse() func(*http.Response) error {
 			}
 
 			// Security: Strip sensitive headers on cross-host redirects to prevent
-			// leaking credentials (e.g., bearer tokens) to third-party CDN/mirrors
-			if isSameHost(resp.Request.URL, location) {
-				// Same-host redirect: preserve all headers including Authorization
+			// leaking credentials (e.g., bearer tokens) to third-party CDN/mirrors.
+			// Also strip on HTTPS→HTTP downgrades even if same host.
+			isSchemeDowngrade := resp.Request.URL.Scheme == "https" && location.Scheme == "http"
+			if isSameHost(resp.Request.URL, location) && !isSchemeDowngrade {
+				// Same-host redirect without scheme downgrade: preserve all headers including Authorization
 				copyHeaders(resp.Request.Header, redirectReq.Header)
 			} else {
-				// Cross-host redirect: exclude sensitive auth headers
+				// Cross-host redirect or HTTPS→HTTP downgrade: exclude sensitive auth headers
 				copyHeadersExcluding(resp.Request.Header, redirectReq.Header,
 					[]string{"Authorization", "Cookie", "Proxy-Authorization"})
 			}
@@ -484,19 +494,26 @@ func isSameHost(url1, url2 *url.URL) bool {
 }
 
 func replaceResponse(originalResp, redirectResp *http.Response) {
-	// Preserve all values for multi-valued headers (e.g., Set-Cookie)
-	for name, values := range redirectResp.Header {
-		originalResp.Header.Del(name) // Clear existing values first
-		for _, value := range values {
-			originalResp.Header.Add(name, value) // Add all values
-		}
-	}
 	// Close the original body to prevent connection leaks
 	if originalResp.Body != nil {
 		_ = originalResp.Body.Close()
 	}
-	originalResp.Body = redirectResp.Body
+
+	// Replace all response metadata from redirectResp
+	originalResp.Status = redirectResp.Status
 	originalResp.StatusCode = redirectResp.StatusCode
+	originalResp.Proto = redirectResp.Proto
+	originalResp.ProtoMajor = redirectResp.ProtoMajor
+	originalResp.ProtoMinor = redirectResp.ProtoMinor
+	originalResp.Header = redirectResp.Header.Clone()
+	originalResp.Body = redirectResp.Body
+	originalResp.ContentLength = redirectResp.ContentLength
+	originalResp.TransferEncoding = redirectResp.TransferEncoding
+	originalResp.Close = redirectResp.Close
+	originalResp.Uncompressed = redirectResp.Uncompressed
+	originalResp.Trailer = redirectResp.Trailer
+	originalResp.TLS = redirectResp.TLS
+	// Preserve originalResp.Request - it must point to the original request
 }
 
 func parseImageURL(queries url.Values) (imageDetails ImageDetails, err error) {
@@ -511,7 +528,10 @@ func parseImageURL(queries url.Values) (imageDetails ImageDetails, err error) {
 	ociImageName = strings.TrimSuffix(ociImageName, ".efi")
 
 	// Extract registry domain and repository using distribution/reference
-	registryDomain := registry.ExtractRegistryDomain(ociImageName)
+	registryDomain, err := registry.ExtractRegistryDomain(ociImageName)
+	if err != nil {
+		return ImageDetails{}, err
+	}
 	named, err := reference.ParseNormalizedNamed(ociImageName)
 	if err != nil {
 		return ImageDetails{}, fmt.Errorf("invalid image reference: %w", err)

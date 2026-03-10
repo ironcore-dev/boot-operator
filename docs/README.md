@@ -48,17 +48,28 @@ These servers leverage Kubernetes controllers and API objects to manage the boot
 
 Boot Operator enforces OCI registry restrictions at two levels:
 
-1. **Controller level (early validation):** The PXE and HTTP boot controllers validate image references against the registry allow/block list during reconciliation. This means misconfigured or disallowed registries are rejected immediately when a `ServerBootConfiguration` is created, providing fast feedback before any machine attempts to boot.
+1. **Controller level (early validation):** The PXE and HTTP boot controllers validate image references against the registry allow list during reconciliation. This means misconfigured or disallowed registries are rejected immediately when a `ServerBootConfiguration` is created, providing fast feedback before any machine attempts to boot.
 
 2. **Image Proxy Server level (runtime enforcement):** The image proxy server also validates registry domains before proxying layer downloads, acting as a second line of defense.
 
-Registry restrictions are configured via CLI flags on the manager binary:
+Registry restrictions are configured via the `--allowed-registries` CLI flag on the manager binary.
 
-| Flag | Description |
-|------|-------------|
-| `--allowed-registries` | Comma-separated list of permitted registries (allowlist mode). Only these registries are accepted. |
-| `--blocked-registries` | Comma-separated list of denied registries (blocklist mode). All registries except these are accepted. |
+### Default Behavior
 
-- If `--allowed-registries` is set, it takes precedence over `--blocked-registries`.
-- If neither flag is set, all registries are **denied** (fail-closed).
-- Docker Hub variants (`docker.io`, `index.docker.io`, `registry-1.docker.io`) are normalized for consistent matching.
+By default (when `--allowed-registries` is not set), Boot Operator allows only **ghcr.io** registry. This provides a secure-by-default configuration with zero configuration needed for the common case.
+
+### Custom Configuration
+
+To allow additional registries or replace the default, use the `--allowed-registries` flag with a comma-separated list:
+
+```bash
+--allowed-registries=ghcr.io,registry.example.com,keppel.global.cloud.sap
+```
+
+**Important:** When you set `--allowed-registries`, it completely replaces the default. If you want to use ghcr.io along with other registries, you must explicitly include `ghcr.io` in your list.
+
+### Registry Matching
+
+- Docker Hub variants (`docker.io`, `index.docker.io`, `registry-1.docker.io`) are normalized to `docker.io` for consistent matching.
+- All registry domain matching is case-insensitive.
+- Registries not in the allow list are denied.

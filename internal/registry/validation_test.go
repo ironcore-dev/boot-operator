@@ -12,6 +12,7 @@ func TestExtractRegistryDomain(t *testing.T) {
 		name     string
 		imageRef string
 		want     string
+		wantErr  bool
 	}{
 		{
 			name:     "ghcr.io with tag",
@@ -19,9 +20,9 @@ func TestExtractRegistryDomain(t *testing.T) {
 			want:     "ghcr.io",
 		},
 		{
-			name:     "keppel with tag",
-			imageRef: "keppel.global.cloud.sap/ironcore/gardenlinux-iso:arm64",
-			want:     "keppel.global.cloud.sap",
+			name:     "custom registry with tag",
+			imageRef: "registry.example.com/ironcore/gardenlinux-iso:arm64",
+			want:     "registry.example.com",
 		},
 		{
 			name:     "docker hub explicit",
@@ -53,12 +54,21 @@ func TestExtractRegistryDomain(t *testing.T) {
 			imageRef: "ghcr.io/namespace/image",
 			want:     "ghcr.io",
 		},
+		{
+			name:     "malformed reference returns error",
+			imageRef: "not a valid@image:reference",
+			wantErr:  true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ExtractRegistryDomain(tt.imageRef)
-			if got != tt.want {
+			got, err := ExtractRegistryDomain(tt.imageRef)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ExtractRegistryDomain(%q) error = %v, wantErr %v", tt.imageRef, err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got != tt.want {
 				t.Errorf("ExtractRegistryDomain(%q) = %q, want %q", tt.imageRef, got, tt.want)
 			}
 		})
@@ -122,9 +132,9 @@ func TestNormalizeDockerHubDomain(t *testing.T) {
 			want:   "ghcr.io",
 		},
 		{
-			name:   "non-Docker Hub - keppel preserved",
-			domain: "keppel.global.cloud.sap",
-			want:   "keppel.global.cloud.sap",
+			name:   "non-Docker Hub - custom registry preserved",
+			domain: "registry.example.com",
+			want:   "registry.example.com",
 		},
 	}
 
@@ -143,127 +153,91 @@ func TestIsRegistryAllowed(t *testing.T) {
 		name        string
 		registry    string
 		allowList   string
-		blockList   string
 		want        bool
 		description string
 	}{
 		{
 			name:        "allowed registry - ghcr.io",
 			registry:    "ghcr.io",
-			allowList:   "ghcr.io,keppel.global.cloud.sap",
-			blockList:   "",
+			allowList:   "ghcr.io,registry.example.com",
 			want:        true,
 			description: "ghcr.io is in allow list",
 		},
 		{
-			name:        "allowed registry - keppel",
-			registry:    "keppel.global.cloud.sap",
-			allowList:   "ghcr.io,keppel.global.cloud.sap",
-			blockList:   "",
+			name:        "allowed registry - custom",
+			registry:    "registry.example.com",
+			allowList:   "ghcr.io,registry.example.com",
 			want:        true,
-			description: "keppel.global.cloud.sap is in allow list",
+			description: "registry.example.com is in allow list",
 		},
 		{
 			name:        "blocked registry - docker.io with allow list",
 			registry:    "docker.io",
-			allowList:   "ghcr.io,keppel.global.cloud.sap",
-			blockList:   "",
+			allowList:   "ghcr.io,registry.example.com",
 			want:        false,
 			description: "docker.io is NOT in allow list",
 		},
 		{
-			name:        "allowed with block list - ghcr.io",
+			name:        "default - ghcr.io allowed when no config",
 			registry:    "ghcr.io",
 			allowList:   "",
-			blockList:   "docker.io,registry-1.docker.io",
 			want:        true,
-			description: "ghcr.io is NOT in block list",
+			description: "ghcr.io is allowed by default when no configuration",
 		},
 		{
-			name:        "blocked with block list - docker.io",
+			name:        "default - docker.io blocked when no config",
 			registry:    "docker.io",
 			allowList:   "",
-			blockList:   "docker.io,registry-1.docker.io",
 			want:        false,
-			description: "docker.io is in block list",
+			description: "docker.io is blocked by default when no configuration",
 		},
 		{
-			name:        "blocked with block list - registry-1.docker.io",
-			registry:    "registry-1.docker.io",
+			name:        "default - other registry blocked when no config",
+			registry:    "registry.example.com",
 			allowList:   "",
-			blockList:   "docker.io,registry-1.docker.io",
 			want:        false,
-			description: "registry-1.docker.io is in block list",
-		},
-		{
-			name:        "deny all - no lists configured",
-			registry:    "ghcr.io",
-			allowList:   "",
-			blockList:   "",
-			want:        false,
-			description: "fail-closed: deny all when neither list is set",
-		},
-		{
-			name:        "allow list takes precedence",
-			registry:    "ghcr.io",
-			allowList:   "ghcr.io",
-			blockList:   "ghcr.io",
-			want:        true,
-			description: "allow list takes precedence over block list",
+			description: "other registries blocked by default when no configuration",
 		},
 		{
 			name:        "whitespace handling",
 			registry:    "ghcr.io",
-			allowList:   " ghcr.io , keppel.global.cloud.sap ",
-			blockList:   "",
+			allowList:   " ghcr.io , registry.example.com ",
 			want:        true,
 			description: "handles whitespace in allow list",
-		},
-		{
-			name:        "case-insensitive Docker Hub - uppercase blocklist",
-			registry:    "docker.io",
-			allowList:   "",
-			blockList:   "DOCKER.IO",
-			want:        false,
-			description: "docker.io blocked by uppercase DOCKER.IO in blocklist",
-		},
-		{
-			name:        "case-insensitive Docker Hub - mixed case registry",
-			registry:    "DOCKER.IO",
-			allowList:   "",
-			blockList:   "docker.io",
-			want:        false,
-			description: "uppercase DOCKER.IO blocked by lowercase docker.io in blocklist",
-		},
-		{
-			name:        "case-insensitive Docker Hub - index variant",
-			registry:    "INDEX.DOCKER.IO",
-			allowList:   "",
-			blockList:   "docker.io",
-			want:        false,
-			description: "INDEX.DOCKER.IO normalized and blocked by docker.io",
-		},
-		{
-			name:        "case-insensitive Docker Hub - registry-1 variant",
-			registry:    "REGISTRY-1.DOCKER.IO",
-			allowList:   "",
-			blockList:   "docker.io",
-			want:        false,
-			description: "REGISTRY-1.DOCKER.IO normalized and blocked by docker.io",
 		},
 		{
 			name:        "case-insensitive non-Docker registry matching",
 			registry:    "GHCR.IO",
 			allowList:   "ghcr.io",
-			blockList:   "",
 			want:        true,
 			description: "all registries are case-insensitive (GHCR.IO matches ghcr.io)",
+		},
+		{
+			name:        "case-insensitive default - uppercase GHCR.IO",
+			registry:    "GHCR.IO",
+			allowList:   "",
+			want:        true,
+			description: "uppercase GHCR.IO matches default ghcr.io",
+		},
+		{
+			name:        "case-insensitive default - mixed case Ghcr.Io",
+			registry:    "Ghcr.Io",
+			allowList:   "",
+			want:        true,
+			description: "mixed case Ghcr.Io matches default ghcr.io",
+		},
+		{
+			name:        "custom allow list replaces default",
+			registry:    "ghcr.io",
+			allowList:   "docker.io,registry.example.com",
+			want:        false,
+			description: "ghcr.io blocked when custom allow list doesn't include it",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := NewValidator(tt.allowList, tt.blockList)
+			v := NewValidator(tt.allowList)
 			got := v.IsRegistryAllowed(tt.registry)
 			if got != tt.want {
 				t.Errorf("IsRegistryAllowed(%q) = %v, want %v (%s)", tt.registry, got, tt.want, tt.description)
@@ -277,7 +251,6 @@ func TestValidateImageRegistry(t *testing.T) {
 		name        string
 		imageRef    string
 		allowList   string
-		blockList   string
 		wantErr     bool
 		errContains string
 		description string
@@ -285,24 +258,21 @@ func TestValidateImageRegistry(t *testing.T) {
 		{
 			name:        "allowed - ghcr.io image",
 			imageRef:    "ghcr.io/ironcore-dev/os-images/gardenlinux:1877.0",
-			allowList:   "ghcr.io,keppel.global.cloud.sap",
-			blockList:   "",
+			allowList:   "ghcr.io,registry.example.com",
 			wantErr:     false,
 			description: "ghcr.io image should be allowed",
 		},
 		{
-			name:        "allowed - keppel image",
-			imageRef:    "keppel.global.cloud.sap/ironcore/gardenlinux-iso:arm64",
-			allowList:   "ghcr.io,keppel.global.cloud.sap",
-			blockList:   "",
+			name:        "allowed - custom registry image",
+			imageRef:    "registry.example.com/ironcore/gardenlinux-iso:arm64",
+			allowList:   "ghcr.io,registry.example.com",
 			wantErr:     false,
-			description: "keppel.global.cloud.sap image should be allowed",
+			description: "registry.example.com image should be allowed",
 		},
 		{
 			name:        "blocked - docker.io with allow list",
 			imageRef:    "docker.io/library/ubuntu:latest",
-			allowList:   "ghcr.io,keppel.global.cloud.sap",
-			blockList:   "",
+			allowList:   "ghcr.io,registry.example.com",
 			wantErr:     true,
 			errContains: "registry not allowed: registry-1.docker.io",
 			description: "docker.io should be blocked when not in allow list",
@@ -310,8 +280,7 @@ func TestValidateImageRegistry(t *testing.T) {
 		{
 			name:        "blocked - implicit docker hub",
 			imageRef:    "ubuntu:latest",
-			allowList:   "ghcr.io,keppel.global.cloud.sap",
-			blockList:   "",
+			allowList:   "ghcr.io,registry.example.com",
 			wantErr:     true,
 			errContains: "registry not allowed: registry-1.docker.io",
 			description: "implicit docker hub should be blocked",
@@ -319,44 +288,62 @@ func TestValidateImageRegistry(t *testing.T) {
 		{
 			name:        "error shows allowed registries",
 			imageRef:    "docker.io/library/alpine:latest",
-			allowList:   "ghcr.io,keppel.global.cloud.sap",
-			blockList:   "",
+			allowList:   "ghcr.io,registry.example.com",
 			wantErr:     true,
-			errContains: "allowed registries: ghcr.io,keppel.global.cloud.sap",
+			errContains: "allowed registries: ghcr.io,registry.example.com",
 			description: "error message should show the allowed registries",
 		},
 		{
-			name:        "blocked with block list",
-			imageRef:    "docker.io/library/nginx:latest",
-			allowList:   "",
-			blockList:   "docker.io,registry-1.docker.io",
-			wantErr:     true,
-			errContains: "registry blocked: registry-1.docker.io",
-			description: "docker.io should be blocked when in block list",
-		},
-		{
-			name:        "error shows blocked registries",
-			imageRef:    "registry-1.docker.io/library/redis:latest",
-			allowList:   "",
-			blockList:   "docker.io,registry-1.docker.io",
-			wantErr:     true,
-			errContains: "blocked registries: docker.io,registry-1.docker.io",
-			description: "error message should show the blocked registries",
-		},
-		{
-			name:        "fail-closed no configuration",
+			name:        "default allows ghcr.io",
 			imageRef:    "ghcr.io/test/image:latest",
 			allowList:   "",
-			blockList:   "",
+			wantErr:     false,
+			description: "ghcr.io should be allowed by default",
+		},
+		{
+			name:        "default blocks docker.io",
+			imageRef:    "docker.io/library/nginx:latest",
+			allowList:   "",
 			wantErr:     true,
-			errContains: "no --allowed-registries or --blocked-registries configured",
-			description: "should deny all when no configuration",
+			errContains: "only ghcr.io is allowed by default",
+			description: "docker.io should be blocked by default",
+		},
+		{
+			name:        "default blocks other registries",
+			imageRef:    "registry.example.com/test/image:latest",
+			allowList:   "",
+			wantErr:     true,
+			errContains: "only ghcr.io is allowed by default",
+			description: "other registries should be blocked by default",
+		},
+		{
+			name:        "custom list replaces default - ghcr.io blocked",
+			imageRef:    "ghcr.io/test/image:latest",
+			allowList:   "docker.io,registry.example.com",
+			wantErr:     true,
+			errContains: "registry not allowed: ghcr.io",
+			description: "ghcr.io should be blocked when custom list doesn't include it",
+		},
+		{
+			name:        "custom list replaces default - docker.io allowed",
+			imageRef:    "docker.io/library/redis:latest",
+			allowList:   "docker.io,registry.example.com",
+			wantErr:     false,
+			description: "docker.io should be allowed when in custom list",
+		},
+		{
+			name:        "malformed image reference rejected",
+			imageRef:    "not a valid@image:reference",
+			allowList:   "ghcr.io,docker.io",
+			wantErr:     true,
+			errContains: "invalid image reference",
+			description: "malformed image references should be rejected during parsing",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := NewValidator(tt.allowList, tt.blockList)
+			v := NewValidator(tt.allowList)
 			err := v.ValidateImageRegistry(tt.imageRef)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateImageRegistry(%q) error = %v, wantErr %v (%s)", tt.imageRef, err, tt.wantErr, tt.description)

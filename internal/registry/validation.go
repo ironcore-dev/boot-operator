@@ -15,37 +15,40 @@ const (
 	DefaultRegistry = "registry-1.docker.io"
 	// DockerHubDomain is the canonical short domain for Docker Hub
 	DockerHubDomain = "docker.io"
+	// DefaultAllowedRegistry is the default registry allowed when no configuration is provided
+	DefaultAllowedRegistry = "ghcr.io"
 )
 
-// Validator provides registry validation with configurable allow/block lists.
+// Validator provides registry validation with configurable allow list.
+// If no allowed registries are configured, it defaults to allowing ghcr.io only.
 type Validator struct {
 	AllowedRegistries string
-	BlockedRegistries string
 }
 
-// NewValidator creates a new Validator with the given allowed and blocked registry lists.
-// Each list is a comma-separated string of registry domains.
-func NewValidator(allowedRegistries, blockedRegistries string) *Validator {
+// NewValidator creates a new Validator with the given allowed registry list.
+// The list is a comma-separated string of registry domains.
+// If empty, defaults to allowing ghcr.io only.
+func NewValidator(allowedRegistries string) *Validator {
 	return &Validator{
 		AllowedRegistries: allowedRegistries,
-		BlockedRegistries: blockedRegistries,
 	}
 }
 
 // ExtractRegistryDomain extracts the registry domain from an OCI image reference
 // using the canonical Docker reference parser from github.com/distribution/reference.
-func ExtractRegistryDomain(imageRef string) string {
+// Returns an error if the image reference is malformed.
+func ExtractRegistryDomain(imageRef string) (string, error) {
 	named, err := reference.ParseNormalizedNamed(imageRef)
 	if err != nil {
-		return DefaultRegistry
+		return "", fmt.Errorf("invalid image reference: %w", err)
 	}
 	domain := reference.Domain(named)
 	// The reference library normalizes Docker Hub to "docker.io",
 	// but we use "registry-1.docker.io" as our canonical constant.
 	if domain == DockerHubDomain {
-		return DefaultRegistry
+		return DefaultRegistry, nil
 	}
-	return domain
+	return domain, nil
 }
 
 // normalizeDockerHubDomain normalizes Docker Hub domain variants to canonical form.
@@ -80,29 +83,28 @@ func isInList(registry string, list string) bool {
 	return false
 }
 
-// IsRegistryAllowed checks if a registry is allowed based on the allow/block lists.
+// IsRegistryAllowed checks if a registry is allowed based on the allow list.
+// If no allowed registries are configured, it defaults to allowing ghcr.io only.
 func (v *Validator) IsRegistryAllowed(registry string) bool {
 	if v.AllowedRegistries != "" {
 		return isInList(registry, v.AllowedRegistries)
 	}
 
-	if v.BlockedRegistries != "" {
-		return !isInList(registry, v.BlockedRegistries)
-	}
-
-	return false
+	// Default to allowing ghcr.io when no configuration is provided
+	return normalizeDockerHubDomain(registry) == DefaultAllowedRegistry
 }
 
 // ValidateImageRegistry validates that an image reference uses an allowed registry.
 func (v *Validator) ValidateImageRegistry(imageRef string) error {
-	registry := ExtractRegistryDomain(imageRef)
+	registry, err := ExtractRegistryDomain(imageRef)
+	if err != nil {
+		return err
+	}
 	if !v.IsRegistryAllowed(registry) {
 		if v.AllowedRegistries != "" {
 			return fmt.Errorf("registry not allowed: %s (allowed registries: %s)", registry, v.AllowedRegistries)
-		} else if v.BlockedRegistries != "" {
-			return fmt.Errorf("registry blocked: %s (blocked registries: %s)", registry, v.BlockedRegistries)
 		}
-		return fmt.Errorf("registry not allowed: %s (no --allowed-registries or --blocked-registries configured, denying all)", registry)
+		return fmt.Errorf("registry not allowed: %s (only %s is allowed by default, use --allowed-registries to configure)", registry, DefaultAllowedRegistry)
 	}
 	return nil
 }

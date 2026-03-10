@@ -46,9 +46,9 @@ func TestBuildImageReference(t *testing.T) {
 		},
 		{
 			name:         "tagged reference with complex tag",
-			imageName:    "keppel.global.cloud.sap/ironcore/gardenlinux-iso",
+			imageName:    "registry.example.com/ironcore/gardenlinux-iso",
 			imageVersion: "arm64-v1.0.0-alpha",
-			want:         "keppel.global.cloud.sap/ironcore/gardenlinux-iso:arm64-v1.0.0-alpha",
+			want:         "registry.example.com/ironcore/gardenlinux-iso:arm64-v1.0.0-alpha",
 		},
 	}
 
