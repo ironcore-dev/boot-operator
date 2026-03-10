@@ -79,17 +79,18 @@ const (
 
 // Shared HTTP client for all registry operations to enable connection reuse
 var httpClient = &http.Client{
-	Timeout: 30 * time.Second,
 	Transport: func() *http.Transport {
 		// Clone http.DefaultTransport to inherit proxy settings from environment
 		transport := http.DefaultTransport.(*http.Transport).Clone()
 		// Override specific fields for registry operations
-		transport.MaxIdleConnsPerHost = 10                // Connection pool per host
-		transport.IdleConnTimeout = 90 * time.Second      // Keep-alive duration
-		transport.TLSHandshakeTimeout = 10 * time.Second  // Security timeout
-		transport.ExpectContinueTimeout = 1 * time.Second // Reduce latency
+		transport.MaxIdleConnsPerHost = 10                  // Connection pool per host
+		transport.IdleConnTimeout = 90 * time.Second        // Keep-alive duration
+		transport.TLSHandshakeTimeout = 10 * time.Second    // Security timeout
+		transport.ExpectContinueTimeout = 1 * time.Second   // Reduce latency
+		transport.ResponseHeaderTimeout = 30 * time.Second  // Timeout for response headers only
 		return transport
 	}(),
+	// No Timeout at client level - allows unlimited body streaming for large image layers
 }
 
 // Parse WWW-Authenticate parameter value
@@ -402,8 +403,9 @@ func buildDirector(proxyURL *url.URL, bearerToken string, repository string, dig
 
 func buildModifyResponse() func(*http.Response) error {
 	return func(resp *http.Response) error {
-		// Handle redirects (307, 301, 302, 303)
+		// Handle redirects (307, 308, 301, 302, 303)
 		if resp.StatusCode == http.StatusTemporaryRedirect ||
+			resp.StatusCode == http.StatusPermanentRedirect ||
 			resp.StatusCode == http.StatusMovedPermanently ||
 			resp.StatusCode == http.StatusFound ||
 			resp.StatusCode == http.StatusSeeOther {

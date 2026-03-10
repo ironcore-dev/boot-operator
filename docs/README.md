@@ -29,12 +29,10 @@ Boot Operator includes the following key components:
 
   - **Image Proxy Server**  
     - Handles `/image` requests
-    - Extracts layers from OCI (Open Container Initiative) images, with support for multiple registries (e.g., GHCR, Docker Hub, Keppel, and any OCI-compliant registry)
+    - Extracts layers from OCI (Open Container Initiative) images, with support for multiple registries (e.g., GHCR, Docker Hub, and any OCI-compliant registry)
     - Downloads specific layers based on the requested URI and image specifications
-    - Registry access is controlled via CLI flags:
-      - `--allowed-registries`: comma-separated list of permitted registries (allowlist mode)
-      - `--blocked-registries`: comma-separated list of denied registries (blocklist mode)
-      - If neither flag is set, all registries are denied (fail-closed)
+    - Registry access is controlled via the `--allowed-registries` CLI flag (comma-separated list)
+    - By default (when not specified), only **ghcr.io** is allowed
     - Example:
       - `wget http://SERVER_ADDRESS:30007/image?imageName=ghcr.io/ironcore-dev/os-images/gardenlinux&version=1443.10&layerName=application/vnd.ironcore.image.squashfs.v1alpha1.squashfs`
 
@@ -63,7 +61,7 @@ By default (when `--allowed-registries` is not set), Boot Operator allows only *
 To allow additional registries or replace the default, use the `--allowed-registries` flag with a comma-separated list:
 
 ```bash
---allowed-registries=ghcr.io,registry.example.com,keppel.global.cloud.sap
+--allowed-registries=ghcr.io,registry.example.com,quay.io
 ```
 
 **Important:** When you set `--allowed-registries`, it completely replaces the default. If you want to use ghcr.io along with other registries, you must explicitly include `ghcr.io` in your list.
