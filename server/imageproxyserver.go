@@ -77,20 +77,20 @@ const (
 	maxTokenResponseSize = 64 * 1024 // 64KB - token responses are typically a few hundred bytes
 )
 
-// Shared HTTP client for all registry operations to enable connection reuse
+// Shared HTTP client for all registry operations to enable connection reuse.
+// No Timeout at client level - allows unlimited body streaming for large image layers.
 var httpClient = &http.Client{
 	Transport: func() *http.Transport {
 		// Clone http.DefaultTransport to inherit proxy settings from environment
 		transport := http.DefaultTransport.(*http.Transport).Clone()
 		// Override specific fields for registry operations
-		transport.MaxIdleConnsPerHost = 10                  // Connection pool per host
-		transport.IdleConnTimeout = 90 * time.Second        // Keep-alive duration
-		transport.TLSHandshakeTimeout = 10 * time.Second    // Security timeout
-		transport.ExpectContinueTimeout = 1 * time.Second   // Reduce latency
-		transport.ResponseHeaderTimeout = 30 * time.Second  // Timeout for response headers only
+		transport.MaxIdleConnsPerHost = 10                 // Connection pool per host
+		transport.IdleConnTimeout = 90 * time.Second       // Keep-alive duration
+		transport.TLSHandshakeTimeout = 10 * time.Second   // Security timeout
+		transport.ExpectContinueTimeout = 1 * time.Second  // Reduce latency
+		transport.ResponseHeaderTimeout = 30 * time.Second // Timeout for response headers only
 		return transport
 	}(),
-	// No Timeout at client level - allows unlimited body streaming for large image layers
 }
 
 // Parse WWW-Authenticate parameter value
