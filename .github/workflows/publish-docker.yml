@@ -40,7 +40,7 @@ jobs:
       with:
         ref: ${{ github.event.pull_request.head.sha }}
     - name: Collect metadata
-      uses: docker/metadata-action@v5
+      uses: docker/metadata-action@v6
       id: meta
       with:
         images: |
@@ -55,7 +55,7 @@ jobs:
         flavor: |
           latest=${{ github.ref == 'refs/heads/main' }}
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
+      uses: docker/setup-qemu-action@v4
       with:
         image: tonistiigi/binfmt:latest
         platforms: ${{ env.platforms }}
@@ -63,7 +63,7 @@ jobs:
       run: |
         docker context create builders
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
       timeout-minutes: 5
       with:
         version: latest
@@ -75,7 +75,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     - name: Build and push Docker image
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v7
       timeout-minutes: 10
       with:
         context: .
