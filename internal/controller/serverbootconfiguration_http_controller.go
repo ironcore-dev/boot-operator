@@ -89,13 +89,11 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 	ukiURL, err := r.constructUKIURL(ctx, config.Spec.Image)
 	if err != nil {
 		log.Error(err, "Failed to construct UKI URL")
-		if patchErr := r.patchConfigStateFromHTTPState(ctx,
-			&bootv1alpha1.HTTPBootConfig{Status: bootv1alpha1.HTTPBootConfigStatus{
-				State: bootv1alpha1.HTTPBootConfigStateError}},
-			config); patchErr != nil {
+		if patchErr := PatchServerBootConfigWithError(ctx, r.Client,
+			types.NamespacedName{Name: config.Name, Namespace: config.Namespace}, err); patchErr != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to patch state to error: %w (original error: %w)", patchErr, err)
 		}
-		return ctrl.Result{}, fmt.Errorf("failed to construct UKI URL: %w", err)
+		return ctrl.Result{}, err
 	}
 	log.V(1).Info("Extracted UKI URL for boot")
 

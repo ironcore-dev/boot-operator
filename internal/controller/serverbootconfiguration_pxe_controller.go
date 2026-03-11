@@ -106,10 +106,11 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 
 	kernelURL, initrdURL, squashFSURL, err := r.getImageDetailsFromConfig(ctx, bootConfig)
 	if err != nil {
-		if err := r.patchState(ctx, bootConfig, metalv1alpha1.ServerBootConfigurationStateError); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to patch server boot config state to %s: %w", metalv1alpha1.ServerBootConfigurationStateError, err)
+		if patchErr := PatchServerBootConfigWithError(ctx, r.Client,
+			types.NamespacedName{Name: bootConfig.Name, Namespace: bootConfig.Namespace}, err); patchErr != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch server boot config state: %w (original error: %w)", patchErr, err)
 		}
-		return ctrl.Result{}, fmt.Errorf("failed to get image details from BootConfig: %w", err)
+		return ctrl.Result{}, err
 	}
 	log.V(1).Info("Extracted OS image layer details")
 
@@ -176,15 +177,6 @@ func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx
 	}
 
 	return r.Status().Patch(ctx, bootConfig, client.MergeFrom(bootConfigBase))
-}
-
-func (r *ServerBootConfigurationPXEReconciler) patchState(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration, state metalv1alpha1.ServerBootConfigurationState) error {
-	configBase := config.DeepCopy()
-	config.Status.State = state
-	if err := r.Status().Patch(ctx, config, client.MergeFrom(configBase)); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (r *ServerBootConfigurationPXEReconciler) getSystemUUIDFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {

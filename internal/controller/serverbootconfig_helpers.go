@@ -28,6 +28,8 @@ import (
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -216,4 +218,30 @@ func fetchContent(ctx context.Context, resolver remotes.Resolver, ref string, de
 	}
 
 	return data, nil
+}
+
+// PatchServerBootConfigWithError updates the ServerBootConfiguration state to Error
+// and sets an ImageValidation condition with the error details.
+func PatchServerBootConfigWithError(
+	ctx context.Context,
+	c client.Client,
+	namespacedName types.NamespacedName,
+	err error,
+) error {
+	var cur metalv1alpha1.ServerBootConfiguration
+	if fetchErr := c.Get(ctx, namespacedName, &cur); fetchErr != nil {
+		return fmt.Errorf("failed to fetch ServerBootConfiguration: %w", fetchErr)
+	}
+	base := cur.DeepCopy()
+
+	cur.Status.State = metalv1alpha1.ServerBootConfigurationStateError
+	apimeta.SetStatusCondition(&cur.Status.Conditions, metav1.Condition{
+		Type:               "ImageValidation",
+		Status:             metav1.ConditionFalse,
+		Reason:             "ValidationFailed",
+		Message:            err.Error(),
+		ObservedGeneration: cur.Generation,
+	})
+
+	return c.Status().Patch(ctx, &cur, client.MergeFrom(base))
 }
