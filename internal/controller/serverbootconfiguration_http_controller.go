@@ -154,6 +154,8 @@ func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ct
 	switch httpBootConfig.Status.State {
 	case bootv1alpha1.HTTPBootConfigStateReady:
 		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
+		// Remove ImageValidation condition when transitioning to Ready
+		apimeta.RemoveStatusCondition(&cur.Status.Conditions, "ImageValidation")
 	case bootv1alpha1.HTTPBootConfigStateError:
 		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateError
 	}

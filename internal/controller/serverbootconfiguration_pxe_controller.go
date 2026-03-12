@@ -168,6 +168,8 @@ func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx
 	switch config.Status.State {
 	case v1alpha1.IPXEBootConfigStateReady:
 		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
+		// Remove ImageValidation condition when transitioning to Ready
+		apimeta.RemoveStatusCondition(&bootConfig.Status.Conditions, "ImageValidation")
 	case v1alpha1.IPXEBootConfigStateError:
 		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStateError
 	}
