@@ -12,7 +12,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 
 	"github.com/containerd/containerd/remotes/docker"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/ironcore-dev/boot-operator/internal/registry"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -36,9 +36,10 @@ const (
 
 type ServerBootConfigurationHTTPReconciler struct {
 	client.Client
-	Scheme         *runtime.Scheme
-	ImageServerURL string
-	Architecture   string
+	Scheme            *runtime.Scheme
+	ImageServerURL    string
+	Architecture      string
+	RegistryValidator *registry.Validator
 }
 
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverbootconfigurations,verbs=get;list;watch
@@ -93,7 +94,12 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 
 	ukiURL, err := r.constructUKIURL(ctx, config.Spec.Image)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to construct UKI URL: %w", err)
+		log.Error(err, "Failed to construct UKI URL")
+		if patchErr := PatchServerBootConfigWithError(ctx, r.Client,
+			types.NamespacedName{Name: config.Name, Namespace: config.Namespace}, err); patchErr != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch state to error: %w (original error: %w)", patchErr, err)
+		}
+		return ctrl.Result{}, err
 	}
 	log.V(1).Info("Extracted UKI URL for boot")
 
@@ -154,6 +160,8 @@ func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ct
 	switch httpBootConfig.Status.State {
 	case bootv1alpha1.HTTPBootConfigStateReady:
 		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
+		// Remove ImageValidation condition when transitioning to Ready
+		apimeta.RemoveStatusCondition(&cur.Status.Conditions, "ImageValidation")
 	case bootv1alpha1.HTTPBootConfigStateError:
 		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateError
 	}
@@ -174,88 +182,47 @@ func (r *ServerBootConfigurationHTTPReconciler) getSystemUUIDFromServer(ctx cont
 	return server.Spec.UUID, nil
 }
 
-// getSystemNetworkIDsFromServer fetches the IPs from the network interfaces of the referenced Server object.
+// getSystemNetworkIDsFromServer fetches the IPs and MAC addresses from the network interfaces of the referenced Server object.
 func (r *ServerBootConfigurationHTTPReconciler) getSystemNetworkIDsFromServer(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) ([]string, error) {
 	server := &metalv1alpha1.Server{}
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
 		return nil, fmt.Errorf("failed to get Server: %w", err)
 	}
 
-	nIDs := make([]string, 0, 2*len(server.Status.NetworkInterfaces))
-
-	for _, nic := range server.Status.NetworkInterfaces {
-		if len(nic.IPs) > 0 {
-			for _, ip := range nic.IPs {
-				nIDs = append(nIDs, ip.String())
-			}
-		} else if nic.IP != nil && !nic.IP.IsZero() {
-			nIDs = append(nIDs, nic.IP.String())
-		}
-		nIDs = append(nIDs, nic.MACAddress)
-	}
-	return nIDs, nil
+	return ExtractServerNetworkIDs(server, true), nil
 }
 
 func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(ctx context.Context, image string) (string, error) {
-	imageDetails := strings.Split(image, ":")
-	if len(imageDetails) != 2 {
-		return "", fmt.Errorf("invalid image format")
+	imageName, imageVersion, err := ParseImageReference(image)
+	if err != nil {
+		return "", err
 	}
 
-	ukiDigest, err := r.getUKIDigestFromNestedManifest(ctx, imageDetails[0], imageDetails[1])
+	ukiDigest, err := r.getUKIDigestFromNestedManifest(ctx, imageName, imageVersion)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch UKI layer digest: %w", err)
 	}
 
 	ukiDigest = strings.TrimPrefix(ukiDigest, "sha256:")
-	ukiURL := fmt.Sprintf("%s/%s/sha256-%s.efi", r.ImageServerURL, imageDetails[0], ukiDigest)
+	ukiURL := fmt.Sprintf("%s/%s/sha256-%s.efi", r.ImageServerURL, imageName, ukiDigest)
 	return ukiURL, nil
 }
 
 func (r *ServerBootConfigurationHTTPReconciler) getUKIDigestFromNestedManifest(ctx context.Context, imageName, imageVersion string) (string, error) {
+	imageRef := BuildImageReference(imageName, imageVersion)
+	if err := r.RegistryValidator.ValidateImageRegistry(imageRef); err != nil {
+		return "", fmt.Errorf("registry validation failed: %w", err)
+	}
+
 	resolver := docker.NewResolver(docker.ResolverOptions{})
-	imageRef := fmt.Sprintf("%s:%s", imageName, imageVersion)
 	name, desc, err := resolver.Resolve(ctx, imageRef)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve image reference: %w", err)
 	}
 
-	targetManifestDesc := desc
-	manifestData, err := fetchContent(ctx, resolver, name, desc)
+	manifest, err := FindManifestByArchitecture(ctx, resolver, name, desc, r.Architecture, false)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch manifest data: %w", err)
-	}
-
-	var manifest ocispec.Manifest
-	if desc.MediaType == ocispec.MediaTypeImageIndex {
-		var indexManifest ocispec.Index
-		if err := json.Unmarshal(manifestData, &indexManifest); err != nil {
-			return "", fmt.Errorf("failed to unmarshal index manifest: %w", err)
-		}
-
-		for _, manifest := range indexManifest.Manifests {
-			platform := manifest.Platform
-			if manifest.Platform != nil && platform.Architecture == r.Architecture {
-				targetManifestDesc = manifest
-				break
-			}
-		}
-		if targetManifestDesc.Digest == "" {
-			return "", fmt.Errorf("failed to find target manifest with architecture %s", r.Architecture)
-		}
-
-		nestedData, err := fetchContent(ctx, resolver, name, targetManifestDesc)
-		if err != nil {
-			return "", fmt.Errorf("failed to fetch nested manifest: %w", err)
-		}
-
-		if err := json.Unmarshal(nestedData, &manifest); err != nil {
-			return "", fmt.Errorf("failed to unmarshal nested manifest: %w", err)
-		}
-	} else {
-		if err := json.Unmarshal(manifestData, &manifest); err != nil {
-			return "", fmt.Errorf("failed to unmarshal manifest: %w", err)
-		}
+		return "", err
 	}
 
 	for _, layer := range manifest.Layers {
@@ -268,31 +235,7 @@ func (r *ServerBootConfigurationHTTPReconciler) getUKIDigestFromNestedManifest(c
 }
 
 func (r *ServerBootConfigurationHTTPReconciler) enqueueServerBootConfigReferencingIgnitionSecret(ctx context.Context, secret client.Object) []reconcile.Request {
-	log := ctrl.LoggerFrom(ctx)
-	secretObj, ok := secret.(*corev1.Secret)
-	if !ok {
-		log.Error(nil, "can't decode object into Secret", secret)
-		return nil
-	}
-
-	bootConfigList := &metalv1alpha1.ServerBootConfigurationList{}
-	if err := r.List(ctx, bootConfigList, client.InNamespace(secretObj.Namespace)); err != nil {
-		log.Error(err, "failed to list ServerBootConfiguration for secret", secret)
-		return nil
-	}
-
-	var requests []reconcile.Request
-	for _, bootConfig := range bootConfigList.Items {
-		if bootConfig.Spec.IgnitionSecretRef != nil && bootConfig.Spec.IgnitionSecretRef.Name == secretObj.Name {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      bootConfig.Name,
-					Namespace: bootConfig.Namespace,
-				},
-			})
-		}
-	}
-	return requests
+	return EnqueueServerBootConfigsReferencingSecret(ctx, r.Client, secret)
 }
 
 // SetupWithManager sets up the controller with the Manager.

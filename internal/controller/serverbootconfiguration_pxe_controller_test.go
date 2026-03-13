@@ -64,7 +64,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 				ServerRef: corev1.LocalObjectReference{
 					Name: server.Name,
 				},
-				Image:             "ghcr.io/ironcore-dev/os-images/gardenlinux:1877.0",
+				Image:             MockImageRef("ironcore-dev/os-images/gardenlinux", "1877.0"),
 				IgnitionSecretRef: &corev1.LocalObjectReference{Name: "foo"},
 			},
 		}
@@ -125,7 +125,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 				ServerRef: corev1.LocalObjectReference{
 					Name: server.Name,
 				},
-				Image:             "ghcr.io/gardenlinux/gardenlinux:1772.0",
+				Image:             MockImageRef("gardenlinux/gardenlinux", "1772.0"),
 				IgnitionSecretRef: &corev1.LocalObjectReference{Name: "foo"},
 			},
 		}
