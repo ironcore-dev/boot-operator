@@ -11,32 +11,262 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/distribution/reference"
 	"github.com/go-logr/logr"
+	"github.com/ironcore-dev/boot-operator/internal/registry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	ghcrIOKey      = "ghcr.io/"
-	keppelKey      = "keppel.global.cloud.sap/"
 	imageKey       = "imageName"
 	layerDigestKey = "layerDigest"
 	versionKey     = "version"
 	MediaTypeUKI   = "application/vnd.ironcore.image.uki"
 )
 
+type AuthMethod int
+
+const (
+	AuthNone   AuthMethod = iota // Anonymous access
+	AuthBearer                   // Bearer token via /token endpoint
+)
+
+type RegistryInfo struct {
+	Domain     string
+	AuthMethod AuthMethod
+	TokenURL   string // For bearer token auth
+}
+
+// TokenResponse represents the JSON response from an OCI registry token endpoint.
+// Supports both Docker registry format (token) and OAuth2 format (access_token).
 type TokenResponse struct {
-	Token string `json:"token"`
+	Token       string `json:"token"`        // Docker registry format
+	AccessToken string `json:"access_token"` // OAuth2 format (takes precedence)
 }
 
 type ImageDetails struct {
 	OCIImageName   string
+	RegistryDomain string
 	RepositoryName string
 	LayerDigest    string
 	Version        string
 }
 
-func RunImageProxyServer(imageProxyServerAddr string, k8sClient client.Client, log logr.Logger) {
+// registryCacheEntry holds registry info with expiration timestamp
+type registryCacheEntry struct {
+	info      *RegistryInfo
+	expiresAt time.Time
+}
+
+// Cache registry info to avoid repeated probes
+var registryCache = make(map[string]*registryCacheEntry)
+var registryCacheMutex sync.RWMutex
+
+const (
+	// registryCacheTTL defines how long registry auth info is cached
+	// After this duration, auth detection will be re-run to catch policy changes
+	registryCacheTTL = 15 * time.Minute
+
+	// maxErrorResponseSize limits error response body reads to prevent memory exhaustion
+	maxErrorResponseSize = 4 * 1024 // 4KB - enough for error details
+
+	// maxTokenResponseSize limits token response body reads to prevent memory exhaustion
+	maxTokenResponseSize = 64 * 1024 // 64KB - token responses are typically a few hundred bytes
+)
+
+// Shared HTTP client for all registry operations to enable connection reuse.
+// No Timeout at client level - allows unlimited body streaming for large image layers.
+var httpClient = &http.Client{
+	Transport: func() *http.Transport {
+		// Clone http.DefaultTransport to inherit proxy settings from environment
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		// Override specific fields for registry operations
+		transport.MaxIdleConnsPerHost = 10                 // Connection pool per host
+		transport.IdleConnTimeout = 90 * time.Second       // Keep-alive duration
+		transport.TLSHandshakeTimeout = 10 * time.Second   // Security timeout
+		transport.ExpectContinueTimeout = 1 * time.Second  // Reduce latency
+		transport.ResponseHeaderTimeout = 30 * time.Second // Timeout for response headers only
+		return transport
+	}(),
+}
+
+// Parse WWW-Authenticate parameter value
+func extractParam(header, param string) string {
+	start := strings.Index(header, param+"=\"")
+	if start == -1 {
+		return ""
+	}
+	start += len(param) + 2
+	end := strings.Index(header[start:], "\"")
+	if end == -1 {
+		return ""
+	}
+	return header[start : start+end]
+}
+
+// Parse Bearer token URL from WWW-Authenticate header
+func extractTokenURL(authHeader, repository string) string {
+	realm := extractParam(authHeader, "realm")
+	service := extractParam(authHeader, "service")
+
+	if realm == "" {
+		return ""
+	}
+
+	// Build token URL with repository scope
+	scope := fmt.Sprintf("repository:%s:pull", repository)
+	if service != "" {
+		return fmt.Sprintf("%s?service=%s&scope=%s", realm, service, scope)
+	}
+	return fmt.Sprintf("%s?scope=%s", realm, scope)
+}
+
+// Probe registry to determine auth requirements
+func detectRegistryAuth(registryDomain, repository string) (*RegistryInfo, error) {
+	// Try GET /v2/ - standard registry probe endpoint
+	targetURL := fmt.Sprintf("https://%s/v2/", registryDomain)
+	resp, err := httpClient.Get(targetURL)
+	if err != nil {
+		return nil, fmt.Errorf("registry unreachable: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	info := &RegistryInfo{Domain: registryDomain}
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Anonymous access allowed
+		info.AuthMethod = AuthNone
+		return info, nil
+
+	case http.StatusUnauthorized:
+		// Parse WWW-Authenticate header
+		authHeader := resp.Header.Get("WWW-Authenticate")
+		if authHeader == "" {
+			return nil, fmt.Errorf("401 without WWW-Authenticate header")
+		}
+
+		// HTTP auth scheme matching is case-insensitive per RFC 7235
+		if len(authHeader) > 7 && strings.EqualFold(authHeader[:7], "bearer ") {
+			info.AuthMethod = AuthBearer
+			info.TokenURL = extractTokenURL(authHeader, repository)
+			return info, nil
+		}
+
+		return nil, fmt.Errorf("unsupported auth: %s", authHeader)
+
+	default:
+		return nil, fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	}
+}
+
+// Get or detect registry info with caching and TTL-based expiration
+func getOrDetectRegistry(registry, repository string) (*RegistryInfo, error) {
+	// Cache key includes repository for per-repository auth granularity
+	cacheKey := fmt.Sprintf("%s/%s", registry, repository)
+
+	registryCacheMutex.RLock()
+	if entry, exists := registryCache[cacheKey]; exists {
+		// Check if entry has expired
+		if time.Now().Before(entry.expiresAt) {
+			registryCacheMutex.RUnlock()
+			return entry.info, nil
+		}
+	}
+	registryCacheMutex.RUnlock()
+
+	// Detect and cache with TTL
+	info, err := detectRegistryAuth(registry, repository)
+	if err != nil {
+		return nil, err
+	}
+
+	registryCacheMutex.Lock()
+	registryCache[cacheKey] = &registryCacheEntry{
+		info:      info,
+		expiresAt: time.Now().Add(registryCacheTTL),
+	}
+	registryCacheMutex.Unlock()
+
+	return info, nil
+}
+
+// Get bearer token from token URL
+func getBearerToken(tokenURL string) (string, error) {
+	resp, err := httpClient.Get(tokenURL)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Check HTTP status before attempting to parse JSON
+	if resp.StatusCode != http.StatusOK {
+		// Limit error response body read to prevent memory exhaustion
+		limitedReader := io.LimitReader(resp.Body, maxErrorResponseSize)
+		body, _ := io.ReadAll(limitedReader)
+		return "", fmt.Errorf("token request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Limit token response body read to prevent memory exhaustion
+	limitedReader := io.LimitReader(resp.Body, maxTokenResponseSize)
+	body, err := io.ReadAll(limitedReader)
+	if err != nil {
+		return "", err
+	}
+
+	var tokenResponse TokenResponse
+	if err := json.Unmarshal(body, &tokenResponse); err != nil {
+		return "", fmt.Errorf("failed to parse token response: %w", err)
+	}
+
+	// Prefer access_token (OAuth2 standard) over token (Docker registry format)
+	if tokenResponse.AccessToken != "" {
+		return tokenResponse.AccessToken, nil
+	}
+	if tokenResponse.Token != "" {
+		return tokenResponse.Token, nil
+	}
+
+	return "", fmt.Errorf("token response missing both 'token' and 'access_token' fields")
+}
+
+// cleanupExpiredCacheEntries periodically removes expired entries from the registry cache
+// to prevent unbounded memory growth. Runs every 5 minutes.
+func cleanupExpiredCacheEntries(log logr.Logger) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		now := time.Now()
+		registryCacheMutex.Lock()
+
+		expiredKeys := make([]string, 0)
+		for key, entry := range registryCache {
+			if now.After(entry.expiresAt) {
+				expiredKeys = append(expiredKeys, key)
+			}
+		}
+
+		for _, key := range expiredKeys {
+			delete(registryCache, key)
+		}
+
+		remainingCount := len(registryCache)
+		registryCacheMutex.Unlock()
+
+		if len(expiredKeys) > 0 {
+			log.V(1).Info("Cleaned up expired cache entries", "count", len(expiredKeys), "remainingEntries", remainingCount)
+		}
+	}
+}
+
+func RunImageProxyServer(imageProxyServerAddr string, k8sClient client.Client, validator *registry.Validator, log logr.Logger) {
+	// Start background cleanup of expired cache entries
+	go cleanupExpiredCacheEntries(log)
+
 	http.HandleFunc("/image", func(w http.ResponseWriter, r *http.Request) {
 		imageDetails, err := parseImageURL(r.URL.Query())
 		if err != nil {
@@ -45,14 +275,7 @@ func RunImageProxyServer(imageProxyServerAddr string, k8sClient client.Client, l
 			return
 		}
 
-		if strings.HasPrefix(imageDetails.OCIImageName, ghcrIOKey) {
-			handleGHCR(w, r, &imageDetails, log)
-		} else if strings.HasPrefix(imageDetails.OCIImageName, keppelKey) {
-			handleKeppel(w, r, &imageDetails, log)
-		} else {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			log.Info("Unsupported registry")
-		}
+		handleDockerRegistry(w, r, &imageDetails, validator, log)
 	})
 
 	http.HandleFunc("/httpboot/", func(w http.ResponseWriter, r *http.Request) {
@@ -65,14 +288,7 @@ func RunImageProxyServer(imageProxyServerAddr string, k8sClient client.Client, l
 			return
 		}
 
-		if strings.HasPrefix(imageDetails.OCIImageName, ghcrIOKey) {
-			handleGHCR(w, r, &imageDetails, log)
-		} else if strings.HasPrefix(imageDetails.OCIImageName, keppelKey) {
-			handleKeppel(w, r, &imageDetails, log)
-		} else {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
-			log.Info("Unsupported registry")
-		}
+		handleDockerRegistry(w, r, &imageDetails, validator, log)
 	})
 
 	log.Info("Starting image proxy server", "address", imageProxyServerAddr)
@@ -92,14 +308,16 @@ func parseHttpBootImagePath(path string) (ImageDetails, error) {
 	imageName := strings.Join(segments[:len(segments)-1], "/")
 	digestSegment := segments[len(segments)-1]
 
-	var repositoryName string
-	if strings.HasPrefix(imageName, ghcrIOKey) {
-		repositoryName = strings.TrimPrefix(imageName, ghcrIOKey)
-	} else if strings.HasPrefix(imageName, keppelKey) {
-		repositoryName = strings.TrimPrefix(imageName, keppelKey)
-	} else {
-		return ImageDetails{}, fmt.Errorf("unsupported registry key")
+	// Extract registry domain and repository using distribution/reference
+	registryDomain, err := registry.ExtractRegistryDomain(imageName)
+	if err != nil {
+		return ImageDetails{}, err
 	}
+	named, err := reference.ParseNormalizedNamed(imageName)
+	if err != nil {
+		return ImageDetails{}, fmt.Errorf("invalid image reference: %w", err)
+	}
+	repositoryName := reference.Path(named)
 
 	digestSegment = strings.TrimSuffix(digestSegment, ".efi")
 
@@ -110,96 +328,112 @@ func parseHttpBootImagePath(path string) (ImageDetails, error) {
 
 	return ImageDetails{
 		OCIImageName:   imageName,
-		LayerDigest:    layerDigest,
+		RegistryDomain: registryDomain,
 		RepositoryName: repositoryName,
+		LayerDigest:    layerDigest,
 	}, nil
 }
 
-func handleGHCR(w http.ResponseWriter, r *http.Request, imageDetails *ImageDetails, log logr.Logger) {
-	log.Info("Processing Image Proxy request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
+func handleDockerRegistry(w http.ResponseWriter, r *http.Request, imageDetails *ImageDetails, validator *registry.Validator, log logr.Logger) {
+	registryDomain := imageDetails.RegistryDomain
+	repository := imageDetails.RepositoryName
 
-	bearerToken, err := imageDetails.getBearerToken()
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		log.Info("Error: Failed to obtain the bearer token", "error", err)
+	log.V(1).Info("Processing registry request", "registry", registryDomain, "repository", repository, "digest", imageDetails.LayerDigest)
+
+	if !validator.IsRegistryAllowed(registryDomain) {
+		http.Error(w, "Forbidden: Registry not allowed", http.StatusForbidden)
+		log.Info("Registry blocked", "registry", registryDomain, "allowList", validator.AllowedRegistries)
 		return
 	}
 
+	// Auto-detect auth method (with caching)
+	registryInfo, err := getOrDetectRegistry(registryDomain, repository)
+	if err != nil {
+		http.Error(w, "Registry detection failed", http.StatusBadGateway)
+		log.Error(err, "Failed to detect registry", "registry", registryDomain)
+		return
+	}
+
+	// Get auth token if needed
+	var authToken string
+	switch registryInfo.AuthMethod {
+	case AuthBearer:
+		authToken, err = getBearerToken(registryInfo.TokenURL)
+		if err != nil {
+			http.Error(w, "Authentication failed", http.StatusUnauthorized)
+			log.Error(err, "Failed to get bearer token", "tokenURL", registryInfo.TokenURL)
+			return
+		}
+		log.V(1).Info("Obtained bearer token", "registry", registryDomain)
+	case AuthNone:
+		log.V(1).Info("Registry allows anonymous access", "registry", registryDomain)
+	}
+
+	// Proxy the blob request
 	digest := imageDetails.LayerDigest
-	targetURL := fmt.Sprintf("https://ghcr.io/v2/%s/blobs/%s", imageDetails.RepositoryName, digest)
-	proxyURL, _ := url.Parse(targetURL)
+	proxyURL := &url.URL{
+		Scheme: "https",
+		Host:   registryDomain,
+		Path:   fmt.Sprintf("/v2/%s/blobs/%s", repository, digest),
+	}
 
 	proxy := &httputil.ReverseProxy{
-		Director:       imageDetails.modifyDirector(proxyURL, bearerToken, digest),
-		ModifyResponse: modifyProxyResponse(bearerToken),
+		Director:       buildDirector(proxyURL, authToken, repository, digest),
+		ModifyResponse: buildModifyResponse(),
 	}
 
 	r.URL.Host = proxyURL.Host
 	r.URL.Scheme = proxyURL.Scheme
 	r.Host = proxyURL.Host
 
+	log.Info("Proxying registry request", "targetURL", proxyURL.String(), "authMethod", registryInfo.AuthMethod)
 	proxy.ServeHTTP(w, r)
 }
 
-func handleKeppel(w http.ResponseWriter, r *http.Request, imageDetails *ImageDetails, log logr.Logger) {
-	log.Info("Processing Image Proxy request for Keppel", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
-
-	digest := imageDetails.LayerDigest
-	targetURL := fmt.Sprintf("https://%sv2/%s/blobs/%s", keppelKey, imageDetails.RepositoryName, digest)
-	proxyURL, _ := url.Parse(targetURL)
-
-	proxy := &httputil.ReverseProxy{
-		Director: imageDetails.modifyDirector(proxyURL, "", digest),
+func buildDirector(proxyURL *url.URL, bearerToken string, repository string, digest string) func(*http.Request) {
+	return func(req *http.Request) {
+		req.URL.Scheme = proxyURL.Scheme
+		req.URL.Host = proxyURL.Host
+		req.URL.Path = fmt.Sprintf("/v2/%s/blobs/%s", repository, digest)
+		if bearerToken != "" {
+			req.Header.Set("Authorization", "Bearer "+bearerToken)
+		}
 	}
-
-	r.URL.Host = proxyURL.Host
-	r.URL.Scheme = proxyURL.Scheme
-	r.Host = proxyURL.Host
-
-	proxy.ServeHTTP(w, r)
 }
 
-func (imageDetails ImageDetails) getBearerToken() (string, error) {
-	url := fmt.Sprintf("https://ghcr.io/token?scope=repository:%s:pull", imageDetails.RepositoryName)
-	resp, err := http.Get(url)
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	var tokenResponse TokenResponse
-	if err := json.Unmarshal(body, &tokenResponse); err != nil {
-		return "", err
-	}
-
-	return tokenResponse.Token, nil
-}
-
-func modifyProxyResponse(bearerToken string) func(*http.Response) error {
+func buildModifyResponse() func(*http.Response) error {
 	return func(resp *http.Response) error {
-		resp.Header.Set("Authorization", "Bearer "+bearerToken)
-
-		if resp.StatusCode == http.StatusTemporaryRedirect {
+		// Handle redirects (307, 308, 301, 302, 303)
+		if resp.StatusCode == http.StatusTemporaryRedirect ||
+			resp.StatusCode == http.StatusPermanentRedirect ||
+			resp.StatusCode == http.StatusMovedPermanently ||
+			resp.StatusCode == http.StatusFound ||
+			resp.StatusCode == http.StatusSeeOther {
 			location, err := resp.Location()
 			if err != nil {
 				return err
 			}
 
-			client := &http.Client{}
-			redirectReq, err := http.NewRequest("GET", location.String(), nil)
+			// Propagate original request context to enable cancellation on client disconnect
+			redirectReq, err := http.NewRequestWithContext(resp.Request.Context(), "GET", location.String(), nil)
 			if err != nil {
 				return err
 			}
-			copyHeaders(resp.Request.Header, redirectReq.Header)
 
-			redirectResp, err := client.Do(redirectReq)
+			// Security: Strip sensitive headers on cross-host redirects to prevent
+			// leaking credentials (e.g., bearer tokens) to third-party CDN/mirrors.
+			// Also strip on HTTPS→HTTP downgrades even if same host.
+			isSchemeDowngrade := resp.Request.URL.Scheme == "https" && location.Scheme == "http"
+			if isSameHost(resp.Request.URL, location) && !isSchemeDowngrade {
+				// Same-host redirect without scheme downgrade: preserve all headers including Authorization
+				copyHeaders(resp.Request.Header, redirectReq.Header)
+			} else {
+				// Cross-host redirect or HTTPS→HTTP downgrade: exclude sensitive auth headers
+				copyHeadersExcluding(resp.Request.Header, redirectReq.Header,
+					[]string{"Authorization", "Cookie", "Proxy-Authorization"})
+			}
+
+			redirectResp, err := httpClient.Do(redirectReq)
 			if err != nil {
 				return err
 			}
@@ -233,14 +467,55 @@ func copyHeaders(source http.Header, destination http.Header) {
 	}
 }
 
-func replaceResponse(originalResp, redirectResp *http.Response) {
-	for name, values := range redirectResp.Header {
-		for _, value := range values {
-			originalResp.Header.Set(name, value)
+// copyHeadersExcluding copies headers from source to destination, excluding specified headers.
+// Header name comparison is case-insensitive per HTTP specification.
+func copyHeadersExcluding(source http.Header, destination http.Header, excludeHeaders []string) {
+	// Normalize excluded headers to lowercase for case-insensitive comparison
+	excludeMap := make(map[string]bool, len(excludeHeaders))
+	for _, header := range excludeHeaders {
+		excludeMap[strings.ToLower(header)] = true
+	}
+
+	for name, values := range source {
+		if !excludeMap[strings.ToLower(name)] {
+			for _, value := range values {
+				destination.Add(name, value)
+			}
 		}
 	}
-	originalResp.Body = redirectResp.Body
+}
+
+// isSameHost compares two URLs to determine if they point to the same host.
+// Comparison includes both hostname and port to prevent credential leakage across ports.
+func isSameHost(url1, url2 *url.URL) bool {
+	if url1 == nil || url2 == nil {
+		return false
+	}
+	// URL.Host includes port if specified, e.g., "registry.io:443"
+	return strings.EqualFold(url1.Host, url2.Host)
+}
+
+func replaceResponse(originalResp, redirectResp *http.Response) {
+	// Close the original body to prevent connection leaks
+	if originalResp.Body != nil {
+		_ = originalResp.Body.Close()
+	}
+
+	// Replace all response metadata from redirectResp
+	originalResp.Status = redirectResp.Status
 	originalResp.StatusCode = redirectResp.StatusCode
+	originalResp.Proto = redirectResp.Proto
+	originalResp.ProtoMajor = redirectResp.ProtoMajor
+	originalResp.ProtoMinor = redirectResp.ProtoMinor
+	originalResp.Header = redirectResp.Header.Clone()
+	originalResp.Body = redirectResp.Body
+	originalResp.ContentLength = redirectResp.ContentLength
+	originalResp.TransferEncoding = redirectResp.TransferEncoding
+	originalResp.Close = redirectResp.Close
+	originalResp.Uncompressed = redirectResp.Uncompressed
+	originalResp.Trailer = redirectResp.Trailer
+	originalResp.TLS = redirectResp.TLS
+	// Preserve originalResp.Request - it must point to the original request
 }
 
 func parseImageURL(queries url.Values) (imageDetails ImageDetails, err error) {
@@ -253,30 +528,23 @@ func parseImageURL(queries url.Values) (imageDetails ImageDetails, err error) {
 	}
 
 	ociImageName = strings.TrimSuffix(ociImageName, ".efi")
-	var repositoryName string
-	if strings.HasPrefix(ociImageName, ghcrIOKey) {
-		repositoryName = strings.TrimPrefix(ociImageName, ghcrIOKey)
-	} else if strings.HasPrefix(ociImageName, keppelKey) {
-		repositoryName = strings.TrimPrefix(ociImageName, keppelKey)
-	} else {
-		return ImageDetails{}, fmt.Errorf("unsupported registry key")
+
+	// Extract registry domain and repository using distribution/reference
+	registryDomain, err := registry.ExtractRegistryDomain(ociImageName)
+	if err != nil {
+		return ImageDetails{}, err
 	}
+	named, err := reference.ParseNormalizedNamed(ociImageName)
+	if err != nil {
+		return ImageDetails{}, fmt.Errorf("invalid image reference: %w", err)
+	}
+	repositoryName := reference.Path(named)
 
 	return ImageDetails{
 		OCIImageName:   ociImageName,
+		RegistryDomain: registryDomain,
 		RepositoryName: repositoryName,
 		LayerDigest:    layerDigest,
 		Version:        version,
 	}, nil
-}
-
-func (ImageDetails ImageDetails) modifyDirector(proxyURL *url.URL, bearerToken string, digest string) func(*http.Request) {
-	return func(req *http.Request) {
-		req.URL.Scheme = proxyURL.Scheme
-		req.URL.Host = proxyURL.Host
-		req.URL.Path = fmt.Sprintf("/v2/%s/blobs/%s", ImageDetails.RepositoryName, digest)
-		if bearerToken != "" {
-			req.Header.Set("Authorization", "Bearer "+bearerToken)
-		}
-	}
 }
