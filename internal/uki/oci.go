@@ -5,14 +5,11 @@ package uki
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 
-	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/ironcore-dev/boot-operator/internal/oci"
 )
 
 const MediaTypeUKI = "application/vnd.ironcore.image.uki"
@@ -84,35 +81,9 @@ func getUKIDigestFromNestedManifest(ctx context.Context, imageRef, architecture 
 		return "", fmt.Errorf("failed to resolve image reference: %w", err)
 	}
 
-	manifestData, err := fetchContent(ctx, resolver, name, desc)
+	manifest, err := oci.FindManifestByArchitecture(ctx, resolver, name, desc, architecture, oci.FindManifestOptions{})
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch manifest data: %w", err)
-	}
-
-	var manifest ocispec.Manifest
-	if desc.MediaType == ocispec.MediaTypeImageIndex {
-		var indexManifest ocispec.Index
-		if err := json.Unmarshal(manifestData, &indexManifest); err != nil {
-			return "", fmt.Errorf("failed to unmarshal index manifest: %w", err)
-		}
-
-		targetManifestDesc, found := findManifestByArchitecture(indexManifest, architecture)
-		if !found {
-			return "", fmt.Errorf("failed to find target manifest with architecture %s", architecture)
-		}
-
-		nestedData, err := fetchContent(ctx, resolver, name, targetManifestDesc)
-		if err != nil {
-			return "", fmt.Errorf("failed to fetch nested manifest: %w", err)
-		}
-
-		if err := json.Unmarshal(nestedData, &manifest); err != nil {
-			return "", fmt.Errorf("failed to unmarshal nested manifest: %w", err)
-		}
-	} else {
-		if err := json.Unmarshal(manifestData, &manifest); err != nil {
-			return "", fmt.Errorf("failed to unmarshal manifest: %w", err)
-		}
+		return "", err
 	}
 
 	for _, layer := range manifest.Layers {
@@ -122,42 +93,4 @@ func getUKIDigestFromNestedManifest(ctx context.Context, imageRef, architecture 
 	}
 
 	return "", fmt.Errorf("UKI layer digest not found")
-}
-
-func findManifestByArchitecture(indexManifest ocispec.Index, architecture string) (ocispec.Descriptor, bool) {
-	for _, entry := range indexManifest.Manifests {
-		if entry.Platform != nil && entry.Platform.Architecture == architecture {
-			return entry, true
-		}
-	}
-	return ocispec.Descriptor{}, false
-}
-
-func fetchContent(ctx context.Context, resolver remotes.Resolver, ref string, desc ocispec.Descriptor) ([]byte, error) {
-	fetcher, err := resolver.Fetcher(ctx, ref)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get fetcher: %w", err)
-	}
-
-	reader, err := fetcher.Fetch(ctx, desc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch content: %w", err)
-	}
-
-	defer func() {
-		if cerr := reader.Close(); cerr != nil {
-			fmt.Printf("failed to close reader: %v\n", cerr)
-		}
-	}()
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read content: %w", err)
-	}
-
-	if int64(len(data)) != desc.Size {
-		return nil, fmt.Errorf("size mismatch: expected %d, got %d", desc.Size, len(data))
-	}
-
-	return data, nil
 }

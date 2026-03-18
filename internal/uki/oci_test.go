@@ -2,8 +2,6 @@ package uki
 
 import (
 	"testing"
-
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func TestParseOCIReferenceForUKI(t *testing.T) {
@@ -64,7 +62,6 @@ func TestParseOCIReferenceForUKI(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -85,39 +82,5 @@ func TestParseOCIReferenceForUKI(t *testing.T) {
 				t.Fatalf("ref: got %q, want %q", gotRef, tt.wantRef)
 			}
 		})
-	}
-}
-
-func TestFindManifestByArchitecture(t *testing.T) {
-	t.Parallel()
-
-	d1 := ocispec.Descriptor{
-		Digest: "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-		Platform: &ocispec.Platform{
-			Architecture: "amd64",
-			OS:           "linux",
-		},
-	}
-	d2 := ocispec.Descriptor{
-		Digest: "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-		Platform: &ocispec.Platform{
-			Architecture: "arm64",
-			OS:           "linux",
-		},
-	}
-
-	index := ocispec.Index{Manifests: []ocispec.Descriptor{d1, d2}}
-
-	got, ok := findManifestByArchitecture(index, "arm64")
-	if !ok {
-		t.Fatalf("expected ok=true")
-	}
-	if got.Digest != d2.Digest {
-		t.Fatalf("got digest %q, want %q", got.Digest, d2.Digest)
-	}
-
-	_, ok = findManifestByArchitecture(index, "ppc64le")
-	if ok {
-		t.Fatalf("expected ok=false")
 	}
 }

@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	"github.com/ironcore-dev/boot-operator/internal/oci"
 	"github.com/ironcore-dev/boot-operator/internal/registry"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -229,7 +230,10 @@ func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest
 		return "", "", "", fmt.Errorf("failed to resolve image reference: %w", err)
 	}
 
-	manifest, err := FindManifestByArchitecture(ctx, resolver, name, desc, r.Architecture, true)
+	manifest, err := oci.FindManifestByArchitecture(ctx, resolver, name, desc, r.Architecture, oci.FindManifestOptions{
+		EnableCNAMECompat: true,
+		CNAMEPrefix:       CNAMEPrefixMetalPXE,
+	})
 	if err != nil {
 		return "", "", "", err
 	}
