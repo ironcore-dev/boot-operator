@@ -179,7 +179,7 @@ func (r *ServerBootConfigurationHTTPReconciler) getSystemUUIDFromServer(ctx cont
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
 		return "", fmt.Errorf("failed to get Server: %w", err)
 	}
-	return server.Spec.UUID, nil
+	return server.Spec.SystemUUID, nil
 }
 
 // getSystemNetworkIDsFromServer fetches the IPs and MAC addresses from the network interfaces of the referenced Server object.

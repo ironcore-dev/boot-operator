@@ -38,7 +38,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 				GenerateName: "server-",
 			},
 			Spec: metalv1alpha1.ServerSpec{
-				UUID: "12345",
+				SystemUUID: "12345",
 			},
 		}
 		Expect(k8sClient.Create(ctx, server)).To(Succeed())
@@ -87,7 +87,7 @@ var _ = Describe("ServerBootConfiguration Controller", func() {
 				Controller:         ptr.To(true),
 				BlockOwnerDeletion: ptr.To(true),
 			})),
-			HaveField("Spec.SystemUUID", server.Spec.UUID),
+			HaveField("Spec.SystemUUID", server.Spec.SystemUUID),
 			HaveField("Spec.NetworkIdentifiers", ContainElement("1.1.1.1")),
 			HaveField("Spec.IgnitionSecretRef.Name", "foo"),
 		))
