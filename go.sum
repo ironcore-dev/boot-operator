@@ -141,8 +141,8 @@ github.com/ironcore-dev/controller-utils v0.11.0 h1:vQhZgPxxFwmSi+fSlPEuwCmI5sOP
 github.com/ironcore-dev/controller-utils v0.11.0/go.mod h1:kPIgIjGNMA5zUlwH04rCdDbYnvvDtd79z3Rgav1Yrpg=
 github.com/ironcore-dev/metal v0.0.0-20240624131301-18385f342755 h1:EmR3Ngg2wmOXJkxgsdYVuPXLRfwWmO2Fi+htjih6QGY=
 github.com/ironcore-dev/metal v0.0.0-20240624131301-18385f342755/go.mod h1:+/bmkghOE7acqXDT/LDH57RemaUzlVwnQjttsOjdoyg=
-github.com/ironcore-dev/metal-operator v0.3.0 h1:hHK4rmEH2ZHmZ3GYI8U0D6zbdE627AFp1hyEDwnLLuw=
-github.com/ironcore-dev/metal-operator v0.3.0/go.mod h1:9zPEgLN9bn379RfZmaR2nvxOSLM1sBuhVCUE36uZjNw=
+github.com/ironcore-dev/metal-operator v0.4.0 h1:D/5+eFe2n1Ro81ysWWv+RnyAHtB8pjrQMJzp8FhiYH8=
+github.com/ironcore-dev/metal-operator v0.4.0/go.mod h1:n7TDdJYvW1/4fqSjW5+uX5WRP671wGKyVELcTd8KWto=
 github.com/joshdk/go-junit v1.0.0 h1:S86cUKIdwBHWwA6xCmFlf3RTLfVXYQfvanM5Uh+K6GE=
 github.com/joshdk/go-junit v1.0.0/go.mod h1:TiiV0PqkaNfFXjEiyjWM3XXrhVyCa1K4Zfga6W52ung=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
@@ -204,8 +204,8 @@ github.com/spf13/cobra v1.10.2/go.mod h1:7C1pvHqHw5A4vrJfjNwvOdzYu0Gml16OCs2GRiT
 github.com/spf13/pflag v1.0.9/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
 github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
-github.com/stmcginnis/gofish v0.20.0 h1:hH2V2Qe898F2wWT1loApnkDUrXXiLKqbSlMaH3Y1n08=
-github.com/stmcginnis/gofish v0.20.0/go.mod h1:PzF5i8ecRG9A2ol8XT64npKUunyraJ+7t0kYMpQAtqU=
+github.com/stmcginnis/gofish v0.21.4 h1:daexK8sh31CgeSMkPUNs21HWHHA9ecCPJPyLCTxukCg=
+github.com/stmcginnis/gofish v0.21.4/go.mod h1:PzF5i8ecRG9A2ol8XT64npKUunyraJ+7t0kYMpQAtqU=
 github.com/stoewer/go-strcase v1.3.0 h1:g0eASXYtp+yvN9fK8sH94oCIk0fau9uV1/ZdJ0AVEzs=
 github.com/stoewer/go-strcase v1.3.0/go.mod h1:fAH5hQ5pehh+j3nZfvwdk2RgEgQjAoM8wodgtPmh1xo=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
