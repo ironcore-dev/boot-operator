@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -375,14 +374,7 @@ func handleHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Cli
 	log.Info("Processing HTTPBoot request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
 	ctx := r.Context()
 
-	clientIP, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		log.Error(err, "Failed to parse client IP address", "clientIP", r.RemoteAddr)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	clientIPs := []string{clientIP}
+	var clientIPs []string
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		for _, ip := range strings.Split(xff, ",") {
 			trimmedIP := strings.TrimSpace(ip)

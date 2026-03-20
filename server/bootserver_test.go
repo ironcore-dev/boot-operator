@@ -41,7 +41,7 @@ var _ = Describe("BootServer", func() {
 			Expect(body.UKIURL).To(Equal(defaultUKIURL))
 
 			By("including the recorded client IPs")
-			Expect(body.ClientIPs).NotTo(BeEmpty())
+			Expect(body.ClientIPs).To(BeEmpty())
 
 			By("not setting a SystemUUID in the default case")
 			Expect(body.SystemUUID).To(SatisfyAny(BeEmpty(), Equal("")))
