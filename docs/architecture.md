@@ -17,9 +17,9 @@ Following are the Kubernetes CR and related controllers used to manage the boot 
 
 ## Architectural Diagrams
 
-![Diagram1](../assets/diagram1.png)
+![Diagram1](./assets/diagram1.png)
 
-![Diagram2](../assets/diagram2.png)
+![Diagram2](./assets/diagram2.png)
 
 ### Workflow
 

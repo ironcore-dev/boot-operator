@@ -1,14 +1,12 @@
-FROM squidfunk/mkdocs-material:latest
+FROM node:24-alpine
 
 LABEL project=boot_operator
 
-WORKDIR /docs
+RUN apk add --no-cache bash
 
-COPY docs/requirements.txt requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /app
 
-EXPOSE 8000
+EXPOSE 5173
 
-# Start development server by default
-ENTRYPOINT ["mkdocs"]
-CMD ["serve", "--dev-addr=0.0.0.0:8000"]
+ENTRYPOINT ["./hack/start-docs.sh"]
+

@@ -2,8 +2,9 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 
-# Docker image name for the mkdocs based local development setup
-IMAGE=ironcore-dev/boot-operator-docs
+# Docker image name for the VitePress based local development setup
+DOCS_IMAGE ?= ironcore-dev/boot-operator-docs
+DOCS_PORT ?= 5173
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -237,13 +238,21 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 
 
 .PHONY: startdocs
-startdocs: ## Start the local mkdocs based development environment.
-	docker build -t $(IMAGE) -f docs/Dockerfile . --load
-	docker run -p 8000:8000 -v `pwd`/:/docs $(IMAGE)
+startdocs: ## Start the local VitePress based development environment.
+	@# When users have `docker build` forwarded to buildx (via `docker buildx install`),
+	@# the resulting image may remain only in the build cache unless `--load` is used.
+	@# Prefer `buildx --load` when available to keep `$(CONTAINER_TOOL) run $(DOCS_IMAGE)` working.
+	@if $(CONTAINER_TOOL) buildx version >/dev/null 2>&1; then \
+		$(CONTAINER_TOOL) buildx build --load -t $(DOCS_IMAGE) -f docs/Dockerfile .; \
+	else \
+		$(CONTAINER_TOOL) build -t $(DOCS_IMAGE) -f docs/Dockerfile .; \
+	fi
+	$(CONTAINER_TOOL) run --rm -p $(DOCS_PORT):5173 -v "$(shell pwd)":/app $(DOCS_IMAGE)
 
 .PHONY: cleandocs
-cleandocs: ## Remove all local mkdocs Docker images (cleanup).
-	docker container prune --force --filter "label=project=boot_operator"
+cleandocs: ## Cleanup local docs Docker artifacts (image + dangling layers).
+	-$(CONTAINER_TOOL) image rm --force $(DOCS_IMAGE)
+	-$(CONTAINER_TOOL) image prune --force --filter "label=project=boot_operator"
 
 .PHONY: addlicense
 addlicense: $(ADDLICENSE) ## Download addlicense locally if necessary.
