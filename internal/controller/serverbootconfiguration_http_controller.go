@@ -12,6 +12,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 
 	"github.com/containerd/containerd/remotes/docker"
+	"github.com/ironcore-dev/boot-operator/internal/oci"
 	"github.com/ironcore-dev/boot-operator/internal/registry"
 
 	corev1 "k8s.io/api/core/v1"
@@ -214,7 +215,7 @@ func (r *ServerBootConfigurationHTTPReconciler) getUKIDigestFromNestedManifest(c
 		return "", fmt.Errorf("failed to resolve image reference: %w", err)
 	}
 
-	manifest, err := FindManifestByArchitecture(ctx, resolver, name, desc, r.Architecture, false)
+	manifest, err := oci.FindManifestByArchitecture(ctx, resolver, name, desc, r.Architecture, oci.FindManifestOptions{})
 	if err != nil {
 		return "", err
 	}
