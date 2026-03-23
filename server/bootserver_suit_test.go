@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-logr/logr"
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	"github.com/ironcore-dev/boot-operator/internal/registry"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -46,7 +47,17 @@ var _ = BeforeSuite(func() {
 	testLog := logr.Discard()
 	go func() {
 		defer GinkgoRecover()
-		errCh <- RunBootServer(testServerAddr, ipxeServiceURL, k8sClient, testLog, defaultUKIURL)
+		errCh <- RunBootServer(
+			testServerAddr,
+			ipxeServiceURL,
+			k8sClient,
+			testLog,
+			registry.NewValidator(""),
+			"",
+			defaultUKIURL,
+			"",
+			"amd64",
+		)
 	}()
 
 	Eventually(func() error {

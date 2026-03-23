@@ -18,15 +18,11 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 
-	"github.com/containerd/containerd/remotes"
 	"github.com/distribution/reference"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -66,73 +62,6 @@ func BuildImageReference(imageName, imageVersion string) string {
 		return fmt.Sprintf("%s@%s", imageName, imageVersion)
 	}
 	return fmt.Sprintf("%s:%s", imageName, imageVersion)
-}
-
-// FindManifestByArchitecture navigates an OCI image index to find the manifest for a specific architecture.
-// If enableCNAMECompat is true, it first tries to find manifests using the legacy CNAME annotation approach.
-// Returns the architecture-specific manifest, or an error if not found.
-func FindManifestByArchitecture(ctx context.Context, resolver remotes.Resolver, name string, desc ocispec.Descriptor, architecture string, enableCNAMECompat bool) (ocispec.Manifest, error) {
-	manifestData, err := fetchContent(ctx, resolver, name, desc)
-	if err != nil {
-		return ocispec.Manifest{}, fmt.Errorf("failed to fetch manifest data: %w", err)
-	}
-
-	var manifest ocispec.Manifest
-	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		return ocispec.Manifest{}, fmt.Errorf("failed to unmarshal manifest: %w", err)
-	}
-
-	// If not an index, return the manifest directly
-	if desc.MediaType != ocispec.MediaTypeImageIndex {
-		return manifest, nil
-	}
-
-	// Parse as index and find architecture-specific manifest
-	var indexManifest ocispec.Index
-	if err := json.Unmarshal(manifestData, &indexManifest); err != nil {
-		return ocispec.Manifest{}, fmt.Errorf("failed to unmarshal index manifest: %w", err)
-	}
-
-	var targetManifestDesc ocispec.Descriptor
-
-	// Backward compatibility for CNAME prefix based OCI (PXE only)
-	if enableCNAMECompat {
-		for _, m := range indexManifest.Manifests {
-			if strings.HasPrefix(m.Annotations["cname"], CNAMEPrefixMetalPXE) {
-				if m.Annotations["architecture"] == architecture {
-					targetManifestDesc = m
-					break
-				}
-			}
-		}
-	}
-
-	// Standard platform-based architecture lookup
-	if targetManifestDesc.Digest == "" {
-		for _, m := range indexManifest.Manifests {
-			if m.Platform != nil && m.Platform.Architecture == architecture {
-				targetManifestDesc = m
-				break
-			}
-		}
-	}
-
-	if targetManifestDesc.Digest == "" {
-		return ocispec.Manifest{}, fmt.Errorf("failed to find target manifest with architecture %s", architecture)
-	}
-
-	// Fetch the nested manifest
-	nestedData, err := fetchContent(ctx, resolver, name, targetManifestDesc)
-	if err != nil {
-		return ocispec.Manifest{}, fmt.Errorf("failed to fetch nested manifest: %w", err)
-	}
-
-	var nestedManifest ocispec.Manifest
-	if err := json.Unmarshal(nestedData, &nestedManifest); err != nil {
-		return ocispec.Manifest{}, fmt.Errorf("failed to unmarshal nested manifest: %w", err)
-	}
-
-	return nestedManifest, nil
 }
 
 // ExtractServerNetworkIDs extracts IP addresses (and optionally MAC addresses) from a Server's network interfaces.
@@ -187,37 +116,6 @@ func EnqueueServerBootConfigsReferencingSecret(ctx context.Context, c client.Cli
 		}
 	}
 	return requests
-}
-
-// fetchContent fetches the content of an OCI descriptor using the provided resolver.
-// It validates the content size matches the descriptor and returns the raw bytes.
-func fetchContent(ctx context.Context, resolver remotes.Resolver, ref string, desc ocispec.Descriptor) ([]byte, error) {
-	fetcher, err := resolver.Fetcher(ctx, ref)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get fetcher: %w", err)
-	}
-
-	reader, err := fetcher.Fetch(ctx, desc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch content: %w", err)
-	}
-
-	defer func() {
-		if cerr := reader.Close(); cerr != nil {
-			fmt.Printf("failed to close reader: %v\n", cerr)
-		}
-	}()
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read content: %w", err)
-	}
-
-	if int64(len(data)) != desc.Size {
-		return nil, fmt.Errorf("size mismatch: expected %d, got %d", desc.Size, len(data))
-	}
-
-	return data, nil
 }
 
 // PatchServerBootConfigWithError updates the ServerBootConfiguration state to Error

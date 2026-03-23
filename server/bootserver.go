@@ -25,6 +25,8 @@ import (
 	butanecommon "github.com/coreos/butane/config/common"
 	"github.com/go-logr/logr"
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	"github.com/ironcore-dev/boot-operator/internal/registry"
+	"github.com/ironcore-dev/boot-operator/internal/uki"
 )
 
 type IPXETemplateData struct {
@@ -52,16 +54,25 @@ var predefinedConditions = map[string]v1.Condition{
 
 var configDriveCache *ConfigDriveCache
 
-func RunBootServer(ipxeServerAddr string, ipxeServiceURL string, k8sClient client.Client, log logr.Logger, defaultUKIURL string) error {
-	// Initialize config drive cache with 10 minute TTL and 100MB max size
+func RunBootServer(
+	ipxeServerAddr string,
+	ipxeServiceURL string,
+	k8sClient client.Client,
+	log logr.Logger,
+	registryValidator *registry.Validator,
+	defaultOCIImage string,
+	defaultUKIURL string,
+	imageServerURL string,
+	architecture string,
+) error {
 	configDriveCache = NewConfigDriveCache(10*time.Minute, 100*1024*1024)
-
+	
 	http.HandleFunc("/ipxe/", func(w http.ResponseWriter, r *http.Request) {
 		handleIPXE(w, r, k8sClient, log, ipxeServiceURL)
 	})
 
 	http.HandleFunc("/httpboot", func(w http.ResponseWriter, r *http.Request) {
-		handleHTTPBoot(w, r, k8sClient, log, defaultUKIURL)
+		handleHTTPBoot(w, r, k8sClient, log, registryValidator, defaultOCIImage, defaultUKIURL, imageServerURL, architecture)
 	})
 
 	http.HandleFunc("/ignition/", func(w http.ResponseWriter, r *http.Request) {
@@ -382,7 +393,17 @@ func renderIgnition(yamlData []byte) ([]byte, error) {
 	return jsonData, nil
 }
 
-func handleHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, defaultUKIURL string) {
+func handleHTTPBoot(
+	w http.ResponseWriter,
+	r *http.Request,
+	k8sClient client.Client,
+	log logr.Logger,
+	registryValidator *registry.Validator,
+	defaultOCIImage string,
+	defaultUKIURL string,
+	imageServerURL string,
+	architecture string,
+) {
 	log.Info("Processing HTTPBoot request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
 	ctx := r.Context()
 
@@ -413,9 +434,42 @@ func handleHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient client.Cli
 	var httpBootResponseData map[string]string
 	if len(httpBootConfigs.Items) == 0 {
 		log.Info("No HTTPBootConfig found for client IP, delivering default httpboot data", "clientIPs", clientIPs)
+		if defaultOCIImage == "" && defaultUKIURL == "" {
+			log.Error(
+				fmt.Errorf("no default UKI configured"),
+				"Both defaultOCIImage and defaultUKIURL are empty; refusing to return an empty UKIURL",
+				"defaultOCIImage", defaultOCIImage,
+				"defaultUKIURL", defaultUKIURL,
+			)
+			http.Error(w, "HTTP boot is not configured (missing default UKI)", http.StatusInternalServerError)
+			return
+		}
+
+		ukiURL := defaultUKIURL
+		if defaultOCIImage != "" {
+			if registryValidator != nil {
+				if err := registryValidator.ValidateImageRegistry(defaultOCIImage); err != nil {
+					log.Error(err, "Default OCI image rejected by registry allowlist", "image", defaultOCIImage)
+					http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+					return
+				}
+			}
+			if strings.TrimSpace(imageServerURL) == "" {
+				log.Error(fmt.Errorf("image server URL is empty"), "Default OCI image provided but image server URL is not set")
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			constructedURL, err := uki.ConstructUKIURLFromOCI(ctx, defaultOCIImage, imageServerURL, architecture)
+			if err != nil {
+				log.Error(err, "Failed to construct default UKI URL from OCI image", "image", defaultOCIImage)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			ukiURL = constructedURL
+		}
 		httpBootResponseData = map[string]string{
 			"ClientIPs": strings.Join(clientIPs, ","),
-			"UKIURL":    defaultUKIURL,
+			"UKIURL":    ukiURL,
 		}
 	} else {
 		// TODO: Pick the first HttpBootConfig if multiple CRs are found.

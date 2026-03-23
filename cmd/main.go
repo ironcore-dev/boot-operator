@@ -66,7 +66,6 @@ func init() {
 
 func main() {
 	ctx := ctrl.LoggerInto(ctrl.SetupSignalHandler(), setupLog)
-	defaultHttpUKIURL := NewDefaultHTTPBootData()
 	skipControllerNameValidation := true
 
 	var metricsAddr string
@@ -83,12 +82,16 @@ func main() {
 	var imageServerURL string
 	var architecture string
 	var allowedRegistries string
+	var defaultHTTPBootOCIImage string
+	var defaultHTTPBootUKIURL string
 
 	flag.StringVar(&architecture, "architecture", "arm64", "Target system architecture (e.g., amd64, arm64)")
 	flag.IntVar(&ipxeServicePort, "ipxe-service-port", 5000, "IPXE Service port to listen on.")
 	flag.StringVar(&ipxeServiceProtocol, "ipxe-service-protocol", "http", "IPXE Service Protocol.")
 	flag.StringVar(&ipxeServiceURL, "ipxe-service-url", "", "IPXE Service URL.")
 	flag.StringVar(&imageServerURL, "image-server-url", "", "OS Image Server URL.")
+	flag.StringVar(&defaultHTTPBootOCIImage, "default-httpboot-oci-image", "", "Default OCI image reference for http boot")
+	flag.StringVar(&defaultHTTPBootUKIURL, "default-httpboot-uki-url", "", "Deprecated: use --default-httpboot-oci-image")
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.StringVar(&bootserverAddr, "boot-server-address", ":8082", "The address the boot-server binds to.")
@@ -128,6 +131,13 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	if defaultHTTPBootUKIURL != "" {
+		setupLog.Info("Flag --default-httpboot-uki-url is deprecated; use --default-httpboot-oci-image instead")
+	}
+	if defaultHTTPBootOCIImage != "" && defaultHTTPBootUKIURL != "" {
+		setupLog.Info("Ignoring --default-httpboot-uki-url because --default-httpboot-oci-image is set")
+	}
 
 	// set the correct ipxe service URL by getting the address from the environment
 	var ipxeServiceAddr string
@@ -349,7 +359,17 @@ func main() {
 
 	setupLog.Info("starting boot-server")
 	go func() {
-		if err := bootserver.RunBootServer(bootserverAddr, ipxeServiceURL, mgr.GetClient(), serverLog.WithName("bootserver"), *defaultHttpUKIURL); err != nil {
+		if err := bootserver.RunBootServer(
+			bootserverAddr,
+			ipxeServiceURL,
+			mgr.GetClient(),
+			serverLog.WithName("bootserver"),
+			registryValidator,
+			defaultHTTPBootOCIImage,
+			defaultHTTPBootUKIURL,
+			imageServerURL,
+			architecture,
+		); err != nil {
 			setupLog.Error(err, "boot-server exited")
 			panic(err)
 		}
