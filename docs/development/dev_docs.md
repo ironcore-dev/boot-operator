@@ -8,7 +8,7 @@ You can run the documentation via:
 make startdocs
 ```
 
-You can remove the `mkdocs` container image by running:
+You can remove the docs container image by running:
 
 ```shell
 make cleandocs

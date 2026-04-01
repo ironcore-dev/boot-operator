@@ -30,3 +30,8 @@ vendor/
 *.swp
 *.swo
 *~
+
+# Node / VitePress
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/

@@ -30,7 +30,7 @@ HTTPBootConfig is the Schema for the httpbootconfigs API
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `boot.ironcore.dev/v1alpha1` | | |
 | `kind` _string_ | `HTTPBootConfig` | | |
-| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[HTTPBootConfigSpec](#httpbootconfigspec)_ |  |  |  |
 | `status` _[HTTPBootConfigStatus](#httpbootconfigstatus)_ |  |  |  |
 
@@ -49,7 +49,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `systemUUID` _string_ | SystemUUID is the unique identifier (UUID) of the server. |  |  |
-| `ignitionSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core)_ | IgnitionSecretRef is a reference to the secret containing Ignition configuration. |  |  |
+| `ignitionSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | IgnitionSecretRef is a reference to the secret containing Ignition configuration. |  |  |
 | `networkIdentifiers` _string array_ | NetworkIdentifiers is a list of IP addresses and MAC Addresses assigned to the server. |  |  |
 | `ukiURL` _string_ | UKIURL is the URL where the UKI (Unified Kernel Image) is hosted. |  |  |
 
@@ -86,7 +86,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `state` _[HTTPBootConfigState](#httpbootconfigstate)_ |  |  |  |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#condition-v1-meta) array_ | Conditions represent the latest available observations of the IPXEBootConfig's state |  |  |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions represent the latest available observations of the IPXEBootConfig's state |  |  |
 
 
 #### IPXEBootConfig
@@ -103,7 +103,7 @@ IPXEBootConfig is the Schema for the ipxebootconfigs API
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `boot.ironcore.dev/v1alpha1` | | |
 | `kind` _string_ | `IPXEBootConfig` | | |
-| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[IPXEBootConfigSpec](#ipxebootconfigspec)_ |  |  |  |
 | `status` _[IPXEBootConfigStatus](#ipxebootconfigstatus)_ |  |  |  |
 
@@ -128,8 +128,8 @@ _Appears in:_
 | `initrdURL` _string_ | InitrdURL is the URL where the Initrd (initial RAM disk) of the OS is hosted, eg. the URL to the Initrd layer of the OS OCI image. |  |  |
 | `squashfsURL` _string_ | SquashfsURL is the URL where the Squashfs of the OS is hosted, eg.  the URL to the Squashfs layer of the OS OCI image. |  |  |
 | `ipxeServerURL` _string_ | IPXEServerURL is deprecated and will be removed. |  |  |
-| `ignitionSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core)_ | IgnitionSecretRef is a reference to the secret containing the Ignition configuration. |  |  |
-| `ipxeScriptSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#localobjectreference-v1-core)_ | IPXEScriptSecretRef is a reference to the secret containing the custom IPXE script. |  |  |
+| `ignitionSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | IgnitionSecretRef is a reference to the secret containing the Ignition configuration. |  |  |
+| `ipxeScriptSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | IPXEScriptSecretRef is a reference to the secret containing the custom IPXE script. |  |  |
 
 
 #### IPXEBootConfigState
@@ -164,6 +164,6 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `state` _[IPXEBootConfigState](#ipxebootconfigstate)_ | Important: Run "make" to regenerate code after modifying this file |  |  |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#condition-v1-meta) array_ | Conditions represent the latest available observations of the IPXEBootConfig's state |  |  |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions represent the latest available observations of the IPXEBootConfig's state |  |  |
 
 
