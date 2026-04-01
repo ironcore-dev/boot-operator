@@ -30,6 +30,7 @@ path = [
     "mkdocs.yml",
     ".dockerignore",
     ".golangci.yml",
+    "CLAUDE.md",
     "REUSE.toml"
 ]
 precedence = "aggregate"
