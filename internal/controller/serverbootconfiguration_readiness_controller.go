@@ -20,6 +20,9 @@ const (
 	// Condition types written by the mode-specific converters.
 	HTTPBootReadyConditionType = "HTTPBootReady"
 	IPXEBootReadyConditionType = "IPXEBootReady"
+
+	// BootConfigPendingReason is the condition reason used while waiting for a child boot config to reconcile.
+	BootConfigPendingReason = "BootConfigPending"
 )
 
 // ServerBootConfigurationReadinessReconciler aggregates mode-specific readiness conditions and is the

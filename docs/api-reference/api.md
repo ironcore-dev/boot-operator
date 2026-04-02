@@ -86,6 +86,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `state` _[HTTPBootConfigState](#httpbootconfigstate)_ |  |  |  |
+| `observedGeneration` _integer_ | ObservedGeneration is the generation of the HTTPBootConfig that was last reconciled by the controller. |  |  |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions represent the latest available observations of the IPXEBootConfig's state |  |  |
 
 
@@ -164,6 +165,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `state` _[IPXEBootConfigState](#ipxebootconfigstate)_ | Important: Run "make" to regenerate code after modifying this file |  |  |
+| `observedGeneration` _integer_ | ObservedGeneration is the generation of the IPXEBootConfig that was last reconciled by the controller. |  |  |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions represent the latest available observations of the IPXEBootConfig's state |  |  |
 
 

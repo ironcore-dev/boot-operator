@@ -136,6 +136,11 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration is the generation of the HTTPBootConfig
+                  that was last reconciled by the controller.
+                format: int64
+                type: integer
               state:
                 type: string
             type: object

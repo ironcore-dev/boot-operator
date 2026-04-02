@@ -180,22 +180,34 @@ func (r *ServerBootConfigurationPXEReconciler) patchIPXEBootReadyConditionFromIP
 		}
 		base := cur.DeepCopy()
 
-		cond := metav1.Condition{
-			Type:               IPXEBootReadyConditionType,
-			ObservedGeneration: cur.Generation,
+		if cur.Generation != bootConfig.Generation {
+			// The SBC has been updated since this reconcile started; a newer reconcile
+			// will handle the fresh generation. Avoid stamping stale data on it.
+			return nil
 		}
-		switch config.Status.State {
-		case v1alpha1.IPXEBootConfigStateReady:
+
+		cond := metav1.Condition{
+			Type: IPXEBootReadyConditionType,
+			// Use bootConfig.Generation, not cur.Generation: the condition content was
+			// derived from bootConfig's IPXEBootConfig, so it reflects that generation.
+			ObservedGeneration: bootConfig.Generation,
+		}
+		switch {
+		case config.Status.ObservedGeneration < config.Generation:
+			// Child controller hasn't reconciled the new spec yet; don't write anything.
+			// The Owns() watch will re-trigger this reconcile once the child updates its status.
+			return nil
+		case config.Status.State == v1alpha1.IPXEBootConfigStateReady:
 			cond.Status = metav1.ConditionTrue
 			cond.Reason = "BootConfigReady"
 			cond.Message = "IPXE boot configuration is ready."
-		case v1alpha1.IPXEBootConfigStateError:
+		case config.Status.State == v1alpha1.IPXEBootConfigStateError:
 			cond.Status = metav1.ConditionFalse
 			cond.Reason = "BootConfigError"
 			cond.Message = "IPXEBootConfig reported an error."
 		default:
 			cond.Status = metav1.ConditionUnknown
-			cond.Reason = "BootConfigPending"
+			cond.Reason = BootConfigPendingReason
 			cond.Message = "Waiting for IPXEBootConfig to become Ready."
 		}
 

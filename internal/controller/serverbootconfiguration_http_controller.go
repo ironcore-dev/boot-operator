@@ -161,22 +161,34 @@ func (r *ServerBootConfigurationHTTPReconciler) patchHTTPBootReadyConditionFromH
 		}
 		base := cur.DeepCopy()
 
-		cond := metav1.Condition{
-			Type:               HTTPBootReadyConditionType,
-			ObservedGeneration: cur.Generation,
+		if cur.Generation != cfg.Generation {
+			// The SBC has been updated since this reconcile started; a newer reconcile
+			// will handle the fresh generation. Avoid stamping stale data on it.
+			return nil
 		}
-		switch httpBootConfig.Status.State {
-		case bootv1alpha1.HTTPBootConfigStateReady:
+
+		cond := metav1.Condition{
+			Type: HTTPBootReadyConditionType,
+			// Use cfg.Generation, not cur.Generation: the condition content was
+			// derived from cfg's HTTPBootConfig, so it reflects that generation.
+			ObservedGeneration: cfg.Generation,
+		}
+		switch {
+		case httpBootConfig.Status.ObservedGeneration < httpBootConfig.Generation:
+			// Child controller hasn't reconciled the new spec yet; don't write anything.
+			// The Owns() watch will re-trigger this reconcile once the child updates its status.
+			return nil
+		case httpBootConfig.Status.State == bootv1alpha1.HTTPBootConfigStateReady:
 			cond.Status = metav1.ConditionTrue
 			cond.Reason = "BootConfigReady"
 			cond.Message = "HTTP boot configuration is ready."
-		case bootv1alpha1.HTTPBootConfigStateError:
+		case httpBootConfig.Status.State == bootv1alpha1.HTTPBootConfigStateError:
 			cond.Status = metav1.ConditionFalse
 			cond.Reason = "BootConfigError"
 			cond.Message = "HTTPBootConfig reported an error."
 		default:
 			cond.Status = metav1.ConditionUnknown
-			cond.Reason = "BootConfigPending"
+			cond.Reason = BootConfigPendingReason
 			cond.Message = "Waiting for HTTPBootConfig to become Ready."
 		}
 

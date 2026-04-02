@@ -59,6 +59,9 @@ type IPXEBootConfigStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	State IPXEBootConfigState `json:"state,omitempty"`
 
+	// ObservedGeneration is the generation of the IPXEBootConfig that was last reconciled by the controller.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// Conditions represent the latest available observations of the IPXEBootConfig's state
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
