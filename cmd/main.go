@@ -294,6 +294,16 @@ func main() {
 		}
 	}
 
+	if err = (&controller.ServerBootConfigurationReadinessReconciler{
+		Client:          mgr.GetClient(),
+		Scheme:          mgr.GetScheme(),
+		RequireHTTPBoot: controllers.Enabled(serverBootConfigControllerHttp),
+		RequireIPXEBoot: controllers.Enabled(serverBootConfigControllerPxe),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigReadiness")
+		os.Exit(1)
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

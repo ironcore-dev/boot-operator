@@ -27,6 +27,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -142,4 +143,30 @@ func PatchServerBootConfigWithError(
 	})
 
 	return c.Status().Patch(ctx, &cur, client.MergeFrom(base))
+}
+
+// PatchServerBootConfigCondition patches a single condition on the ServerBootConfiguration status.
+// Callers should only set condition types they own. Retries on conflict so concurrent condition
+// writes from HTTP and PXE controllers do not lose each other's updates.
+func PatchServerBootConfigCondition(
+	ctx context.Context,
+	c client.Client,
+	namespacedName types.NamespacedName,
+	condition metav1.Condition,
+) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var cur metalv1alpha1.ServerBootConfiguration
+		if fetchErr := c.Get(ctx, namespacedName, &cur); fetchErr != nil {
+			return fmt.Errorf("failed to fetch ServerBootConfiguration: %w", fetchErr)
+		}
+		base := cur.DeepCopy()
+
+		// Default to current generation if caller didn't set it.
+		if condition.ObservedGeneration == 0 {
+			condition.ObservedGeneration = cur.Generation
+		}
+		apimeta.SetStatusCondition(&cur.Status.Conditions, condition)
+
+		return c.Status().Patch(ctx, &cur, client.MergeFrom(base))
+	})
 }

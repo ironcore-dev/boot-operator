@@ -166,6 +166,13 @@ func SetupTest() *corev1.Namespace {
 			RegistryValidator: registryValidator,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
+		Expect((&ServerBootConfigurationReadinessReconciler{
+			Client:          k8sManager.GetClient(),
+			Scheme:          k8sManager.GetScheme(),
+			RequireHTTPBoot: true,
+			RequireIPXEBoot: true,
+		}).SetupWithManager(k8sManager)).To(Succeed())
+
 		go func() {
 			defer GinkgoRecover()
 			Expect(k8sManager.Start(mgrCtx)).To(Succeed(), "failed to start manager")
