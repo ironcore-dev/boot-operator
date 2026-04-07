@@ -110,9 +110,9 @@ func (r *VirtualMediaBootConfigReconciler) constructBootISOURL(ctx context.Conte
 	// Parse image reference: registry/image:tag
 	imageDetails := strings.Split(imageRef, ":")
 	if len(imageDetails) < 2 {
-		return "",fmt.Errorf("invalid image format: missing tag")
+		return "", fmt.Errorf("invalid image format: missing tag")
 	}
-	
+
 	version := imageDetails[len(imageDetails)-1]
 	imageName := strings.TrimSuffix(imageRef, ":"+version)
 

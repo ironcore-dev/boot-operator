@@ -84,7 +84,6 @@ func (r *ServerBootConfigurationPXEReconciler) reconcileExists(ctx context.Conte
 		return r.delete(ctx, log, config)
 	}
 
-
 	if config.Spec.BootMethod != "" && config.Spec.BootMethod != metalv1alpha1.BootMethodPXE {
 		log.V(1).Info("Skipping ServerBootConfiguration, not PXE boot method", "bootMethod", config.Spec.BootMethod)
 		return ctrl.Result{}, nil

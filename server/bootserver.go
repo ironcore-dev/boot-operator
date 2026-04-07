@@ -27,7 +27,6 @@ import (
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	"github.com/ironcore-dev/boot-operator/internal/registry"
 	"github.com/ironcore-dev/boot-operator/internal/uki"
-	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 )
 
 type IPXETemplateData struct {
@@ -549,38 +548,12 @@ func handleConfigDriveISO(w http.ResponseWriter, r *http.Request, k8sClient clie
 		return
 	}
 
-
 	// Lookup VirtualMediaBootConfig by SystemUUID index
 	virtualMediaConfigList := &bootv1alpha1.VirtualMediaBootConfigList{}
 	err := k8sClient.List(ctx, virtualMediaConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid})
 	if client.IgnoreNotFound(err) != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Error(err, "Failed to list VirtualMediaBootConfig", "uuid", uuid)
-		return
-	}
-
-	// Try uppercase UUID if not found
-	if len(virtualMediaConfigList.Items) == 0 {
-		err = k8sClient.List(ctx, virtualMediaConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToUpper(uuid)})
-		if client.IgnoreNotFound(err) != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			log.Error(err, "Failed to list VirtualMediaBootConfig with uppercase UUID", "uuid", uuid)
-			return
-		}
-	}
-
-	if len(virtualMediaConfigList.Items) == 0 {
-		http.Error(w, "Not Found: VirtualMediaBootConfig not found", http.StatusNotFound)
-		log.Info("VirtualMediaBootConfig not found for UUID", "uuid", uuid)
-		return
-	}
-
-	// Use first matching config (there should only be one per UUID)
-	virtualMediaConfig := &virtualMediaConfigList.Items[0]
-
-	if virtualMediaConfig.Spec.IgnitionSecretRef == nil {
-		http.Error(w, "Bad Request: No ignition secret specified", http.StatusBadRequest)
-		log.Info("No ignition secret specified in VirtualMediaBootConfig", "uuid", uuid)
 		return
 	}
 
@@ -621,10 +594,9 @@ func handleConfigDriveISO(w http.ResponseWriter, r *http.Request, k8sClient clie
 		return
 	}
 
-
 	cacheKey := fmt.Sprintf("%s-%s", string(virtualMediaConfig.UID), secret.ResourceVersion)
 	var isoData []byte
-	
+
 	if cachedISO, found := configDriveCache.Get(cacheKey); found {
 		log.Info("Serving config drive ISO from cache", "uuid", uuid)
 		isoData = cachedISO
@@ -640,7 +612,7 @@ func handleConfigDriveISO(w http.ResponseWriter, r *http.Request, k8sClient clie
 		ignitionFormat := string(secret.Data["format"])
 		var ignitionJSONData []byte
 		var err error
-		
+
 		switch strings.TrimSpace(ignitionFormat) {
 		case bootv1alpha1.FCOSFormat:
 			ignitionJSONData, err = renderIgnition(ignitionData)
@@ -684,7 +656,7 @@ func handleConfigDriveISO(w http.ResponseWriter, r *http.Request, k8sClient clie
 		ignitionFormat := string(secret.Data["format"])
 		var ignitionJSONData []byte
 		var err error
-		
+
 		switch strings.TrimSpace(ignitionFormat) {
 		case bootv1alpha1.FCOSFormat:
 			ignitionJSONData, err = renderIgnition(ignitionData)
@@ -724,7 +696,7 @@ func generateConfigDriveISO(ignitionData []byte) ([]byte, error) {
 	}
 	defer writer.Cleanup()
 
-	err = writer.AddFile(bytes.NewReader(ignitionData), "ignition/config.ign")
+	err = writer.AddFile(bytes.NewReader(ignitionData), "config.ign")
 	if err != nil {
 		return nil, fmt.Errorf("failed to add ignition file: %w", err)
 	}
