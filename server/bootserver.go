@@ -694,7 +694,10 @@ func generateConfigDriveISO(ignitionData []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create ISO writer: %w", err)
 	}
-	defer writer.Cleanup()
+	defer func() {
+		// Cleanup errors are not critical as the ISO is already generated
+		_ = writer.Cleanup()
+	}()
 
 	err = writer.AddFile(bytes.NewReader(ignitionData), "config.ign")
 	if err != nil {

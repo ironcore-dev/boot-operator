@@ -64,6 +64,7 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
+// nolint:gocyclo // Main function requires setup complexity for Kubernetes operator
 func main() {
 	ctx := ctrl.LoggerInto(ctrl.SetupSignalHandler(), setupLog)
 	skipControllerNameValidation := true

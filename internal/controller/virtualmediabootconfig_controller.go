@@ -70,7 +70,7 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 
 	// Verify boot image ref is set
 	if config.Spec.BootImageRef == "" {
-		return r.patchStatus(ctx, config, bootv1alpha1.VirtualMediaBootConfigStateError)
+		return r.patchStatusError(ctx, config)
 	}
 
 	// Verify if the IgnitionRef is set, and it has the intended data key
@@ -78,11 +78,11 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 		ignitionSecret := &corev1.Secret{}
 		if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.IgnitionSecretRef.Name, Namespace: config.Namespace}, ignitionSecret); err != nil {
 			log.Error(err, "Failed to get ignition secret")
-			return r.patchStatus(ctx, config, bootv1alpha1.VirtualMediaBootConfigStateError)
+			return r.patchStatusError(ctx, config)
 		}
 		if ignitionSecret.Data[bootv1alpha1.DefaultIgnitionKey] == nil {
 			log.Error(nil, "Ignition data is missing in secret")
-			return r.patchStatus(ctx, config, bootv1alpha1.VirtualMediaBootConfigStateError)
+			return r.patchStatusError(ctx, config)
 		}
 	}
 
@@ -91,7 +91,7 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 	bootISOURL, err := r.constructBootISOURL(ctx, config.Spec.BootImageRef)
 	if err != nil {
 		log.Error(err, "Failed to construct boot ISO URL")
-		return r.patchStatus(ctx, config, bootv1alpha1.VirtualMediaBootConfigStateError)
+		return r.patchStatusError(ctx, config)
 	}
 
 	// Config drive ISO URL uses the SystemUUID for identification
@@ -228,13 +228,12 @@ func (r *VirtualMediaBootConfigReconciler) fetchContent(ctx context.Context, res
 	return data, nil
 }
 
-func (r *VirtualMediaBootConfigReconciler) patchStatus(
+func (r *VirtualMediaBootConfigReconciler) patchStatusError(
 	ctx context.Context,
 	config *bootv1alpha1.VirtualMediaBootConfig,
-	state bootv1alpha1.VirtualMediaBootConfigState,
 ) (ctrl.Result, error) {
 	base := config.DeepCopy()
-	config.Status.State = state
+	config.Status.State = bootv1alpha1.VirtualMediaBootConfigStateError
 
 	if err := r.Status().Patch(ctx, config, client.MergeFrom(base)); err != nil {
 		return ctrl.Result{}, fmt.Errorf("error patching VirtualMediaBootConfig status: %w", err)
