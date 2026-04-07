@@ -36,6 +36,7 @@ rules:
   resources:
   - httpbootconfigs
   - ipxebootconfigs
+  - virtualmediabootconfigs
   verbs:
   - create
   - delete
@@ -49,6 +50,7 @@ rules:
   resources:
   - httpbootconfigs/finalizers
   - ipxebootconfigs/finalizers
+  - virtualmediabootconfigs/finalizers
   verbs:
   - update
 - apiGroups:
@@ -56,6 +58,7 @@ rules:
   resources:
   - httpbootconfigs/status
   - ipxebootconfigs/status
+  - virtualmediabootconfigs/status
   verbs:
   - get
   - patch

@@ -64,6 +64,13 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcileExists(ctx context.Cont
 	if !config.DeletionTimestamp.IsZero() {
 		return r.delete(ctx, log, config)
 	}
+
+	// Only handle HTTP boot method (also handle empty/unset for backward compatibility)
+	if config.Spec.BootMethod != "" && config.Spec.BootMethod != metalv1alpha1.BootMethodPXE {
+		log.V(1).Info("Skipping ServerBootConfiguration, not PXE/HTTP boot method", "bootMethod", config.Spec.BootMethod)
+		return ctrl.Result{}, nil
+	}
+
 	return r.reconcile(ctx, log, config)
 }
 

@@ -4,6 +4,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"text/template"
 
+	iso9660 "github.com/kdomanski/iso9660"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -96,6 +98,10 @@ func RunBootServer(
 		} else {
 			handleIgnitionIPXEBoot(w, r, k8sClient, log, uuid)
 		}
+	})
+
+	http.HandleFunc("/config-drive/", func(w http.ResponseWriter, r *http.Request) {
+		handleConfigDrive(w, r, k8sClient, log)
 	})
 
 	log.Info("Starting boot server", "address", ipxeServerAddr)
@@ -531,4 +537,99 @@ func updateCondition(conditions []v1.Condition, newCondition v1.Condition) []v1.
 		}
 	}
 	return append(conditions, newCondition)
+}
+
+func handleConfigDrive(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger) {
+	log.V(1).Info("Processing config drive request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
+	ctx := r.Context()
+
+	// Extract UUID from path: /config-drive/{uuid}.iso
+	filename := path.Base(r.URL.Path)
+	uuid := strings.TrimSuffix(filename, ".iso")
+
+	if uuid == "" || uuid == filename {
+		http.Error(w, "Bad Request: UUID is required", http.StatusBadRequest)
+		return
+	}
+
+	// Lookup VirtualMediaBootConfig by SystemUUID
+	configList := &bootv1alpha1.VirtualMediaBootConfigList{}
+	err := k8sClient.List(ctx, configList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid})
+	if err != nil {
+		log.Error(err, "Failed to list VirtualMediaBootConfig", "uuid", uuid)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	if len(configList.Items) == 0 {
+		log.Info("No VirtualMediaBootConfig found for UUID", "uuid", uuid)
+		http.Error(w, "Not Found", http.StatusNotFound)
+		return
+	}
+
+	config := configList.Items[0]
+
+	// Check if ignition secret exists
+	if config.Spec.IgnitionSecretRef == nil {
+		log.Info("No ignition secret configured", "uuid", uuid)
+		http.Error(w, "Not Found: No ignition configured", http.StatusNotFound)
+		return
+	}
+
+	// Fetch ignition data from secret
+	secret := &corev1.Secret{}
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Name:      config.Spec.IgnitionSecretRef.Name,
+		Namespace: config.Namespace,
+	}, secret)
+	if err != nil {
+		log.Error(err, "Failed to fetch ignition secret", "secretName", config.Spec.IgnitionSecretRef.Name)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	ignitionData, exists := secret.Data[bootv1alpha1.DefaultIgnitionKey]
+	if !exists {
+		log.Info("Ignition data not found in secret", "key", bootv1alpha1.DefaultIgnitionKey)
+		http.Error(w, "Internal Server Error: Ignition data missing", http.StatusInternalServerError)
+		return
+	}
+
+	// Generate config drive ISO
+	isoData, err := generateConfigDriveISO(ignitionData)
+	if err != nil {
+		log.Error(err, "Failed to generate config drive ISO")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.iso", uuid))
+	w.WriteHeader(http.StatusOK)
+	w.Write(isoData)
+	log.V(1).Info("Config drive ISO served successfully", "uuid", uuid, "size", len(isoData))
+}
+
+func generateConfigDriveISO(ignitionData []byte) ([]byte, error) {
+
+	writer, err := iso9660.NewWriter()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ISO writer: %w", err)
+	}
+	defer func() {
+		// Cleanup errors are not critical as the ISO is already generated
+		_ = writer.Cleanup()
+	}()
+
+	err = writer.AddFile(bytes.NewReader(ignitionData), "config.ign")
+	if err != nil {
+		return nil, fmt.Errorf("failed to add ignition file: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := writer.WriteTo(&buf, "IGNITION"); err != nil {
+		return nil, fmt.Errorf("failed to write ISO: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }

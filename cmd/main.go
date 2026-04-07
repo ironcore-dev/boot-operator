@@ -47,10 +47,12 @@ var (
 
 const (
 	// core controllers
-	ipxeBootConfigController       = "ipxebootconfig"
-	serverBootConfigControllerPxe  = "serverbootconfigpxe"
-	httpBootConfigController       = "httpbootconfig"
-	serverBootConfigControllerHttp = "serverbootconfighttp"
+	ipxeBootConfigController               = "ipxebootconfig"
+	serverBootConfigControllerPxe          = "serverbootconfigpxe"
+	httpBootConfigController               = "httpbootconfig"
+	serverBootConfigControllerHttp         = "serverbootconfighttp"
+	virtualMediaBootConfigController       = "virtualmediabootconfig"
+	serverBootConfigControllerVirtualMedia = "serverbootconfigvirtualmedia"
 )
 
 func init() {
@@ -62,6 +64,7 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
+// nolint:gocyclo // Main function requires setup complexity for Kubernetes operator
 func main() {
 	ctx := ctrl.LoggerInto(ctrl.SetupSignalHandler(), setupLog)
 	skipControllerNameValidation := true
@@ -110,6 +113,8 @@ func main() {
 		ipxeBootConfigController,
 		serverBootConfigControllerPxe,
 		serverBootConfigControllerHttp,
+		virtualMediaBootConfigController,
+		serverBootConfigControllerVirtualMedia,
 		httpBootConfigController,
 	)
 
@@ -133,6 +138,10 @@ func main() {
 	}
 	if defaultHTTPBootOCIImage != "" && defaultHTTPBootUKIURL != "" {
 		setupLog.Info("Ignoring --default-httpboot-uki-url because --default-httpboot-oci-image is set")
+	}
+	if defaultHTTPBootOCIImage != "" && imageServerURL == "" {
+		setupLog.Error(nil, "--image-server-url must be set when --default-httpboot-oci-image is used")
+		os.Exit(1)
 	}
 
 	// set the correct ipxe service URL by getting the address from the environment
@@ -294,6 +303,29 @@ func main() {
 		}
 	}
 
+	if controllers.Enabled(virtualMediaBootConfigController) {
+		if err = (&controller.VirtualMediaBootConfigReconciler{
+			Client:               mgr.GetClient(),
+			Scheme:               mgr.GetScheme(),
+			ImageServerURL:       imageServerURL,
+			ConfigDriveServerURL: ipxeServiceURL,
+			Architecture:         architecture,
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "VirtualMediaBootConfig")
+			os.Exit(1)
+		}
+	}
+
+	if controllers.Enabled(serverBootConfigControllerVirtualMedia) {
+		if err = (&controller.ServerBootConfigurationVirtualMediaReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ServerBootConfigVirtualMedia")
+			os.Exit(1)
+		}
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -322,6 +354,11 @@ func main() {
 
 	if err := IndexHTTPBootConfigByNetworkIDs(ctx, mgr); err != nil {
 		setupLog.Error(err, "unable to set up indexer for HTTPBootConfig NetworkIdentifiers")
+		os.Exit(1)
+	}
+
+	if err := IndexVirtualMediaBootConfigBySystemUUID(ctx, mgr); err != nil {
+		setupLog.Error(err, "unable to set up indexer for VirtualMediaBootConfig SystemUUID")
 		os.Exit(1)
 	}
 

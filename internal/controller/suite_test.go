@@ -166,6 +166,19 @@ func SetupTest() *corev1.Namespace {
 			RegistryValidator: registryValidator,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
+		Expect((&VirtualMediaBootConfigReconciler{
+			Client:               k8sManager.GetClient(),
+			Scheme:               k8sManager.GetScheme(),
+			ImageServerURL:       "http://localhost:5000/httpboot",
+			ConfigDriveServerURL: "http://localhost:5000",
+			Architecture:         runtime.GOARCH,
+		}).SetupWithManager(k8sManager)).To(Succeed())
+
+		Expect((&ServerBootConfigurationVirtualMediaReconciler{
+			Client: k8sManager.GetClient(),
+			Scheme: k8sManager.GetScheme(),
+		}).SetupWithManager(k8sManager)).To(Succeed())
+
 		go func() {
 			defer GinkgoRecover()
 			Expect(k8sManager.Start(mgrCtx)).To(Succeed(), "failed to start manager")
