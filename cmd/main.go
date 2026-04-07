@@ -47,12 +47,12 @@ var (
 
 const (
 	// core controllers
-	ipxeBootConfigController                         = "ipxebootconfig"
-	serverBootConfigControllerPxe                    = "serverbootconfigpxe"
-	httpBootConfigController                         = "httpbootconfig"
-	serverBootConfigControllerHttp                   = "serverbootconfighttp"
-	virtualMediaBootConfigController                 = "virtualmediabootconfig"
-	serverBootConfigControllerVirtualMedia           = "serverbootconfigvirtualmedia"
+	ipxeBootConfigController               = "ipxebootconfig"
+	serverBootConfigControllerPxe          = "serverbootconfigpxe"
+	httpBootConfigController               = "httpbootconfig"
+	serverBootConfigControllerHttp         = "serverbootconfighttp"
+	virtualMediaBootConfigController       = "virtualmediabootconfig"
+	serverBootConfigControllerVirtualMedia = "serverbootconfigvirtualmedia"
 )
 
 func init() {
@@ -442,11 +442,4 @@ func IndexVirtualMediaBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manag
 			return []string{virtualMediaBootConfig.Spec.SystemUUID}
 		},
 	)
-}
-
-func NewDefaultHTTPBootData() *string {
-	var defaultUKIURL string
-	flag.StringVar(&defaultUKIURL, "default-httpboot-uki-url", "", "Default UKI URL for http boot")
-
-	return &defaultUKIURL
 }
