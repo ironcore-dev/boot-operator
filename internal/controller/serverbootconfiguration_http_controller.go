@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 
 	"github.com/containerd/containerd/remotes/docker"
@@ -68,6 +69,17 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcileExists(ctx context.Cont
 	// Only handle HTTP boot method (also handle empty/unset for backward compatibility)
 	if config.Spec.BootMethod != "" && config.Spec.BootMethod != metalv1alpha1.BootMethodPXE {
 		log.V(1).Info("Skipping ServerBootConfiguration, not PXE/HTTP boot method", "bootMethod", config.Spec.BootMethod)
+		// Cleanup any existing HTTPBootConfig before skipping
+		httpBootConfig := &bootv1alpha1.HTTPBootConfig{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: config.Namespace, Name: config.Name}, httpBootConfig); err == nil {
+			if err := r.Delete(ctx, httpBootConfig); err != nil {
+				log.Error(err, "Failed to delete HTTPBootConfig during boot method change")
+				return ctrl.Result{}, err
+			}
+			log.V(1).Info("Deleted HTTPBootConfig due to boot method change")
+		} else if !errors.IsNotFound(err) {
+			return ctrl.Result{}, fmt.Errorf("failed to check for existing HTTPBootConfig: %w", err)
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -120,8 +132,10 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 			UKIURL:             ukiURL,
 		},
 	}
+	// Deep copy IgnitionSecretRef to avoid pointer aliasing
 	if config.Spec.IgnitionSecretRef != nil {
-		httpBootConfig.Spec.IgnitionSecretRef = config.Spec.IgnitionSecretRef
+		secretRef := *config.Spec.IgnitionSecretRef
+		httpBootConfig.Spec.IgnitionSecretRef = &secretRef
 	}
 
 	if err := controllerutil.SetControllerReference(config, httpBootConfig, r.Scheme); err != nil {
@@ -178,6 +192,7 @@ func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ct
 // getSystemUUIDFromServer fetches the UUID from the referenced Server object.
 func (r *ServerBootConfigurationHTTPReconciler) getSystemUUIDFromServer(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {
 	server := &metalv1alpha1.Server{}
+	// Server is cluster-scoped, so no namespace in ObjectKey
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
 		return "", fmt.Errorf("failed to get Server: %w", err)
 	}
@@ -187,6 +202,7 @@ func (r *ServerBootConfigurationHTTPReconciler) getSystemUUIDFromServer(ctx cont
 // getSystemNetworkIDsFromServer fetches the IPs and MAC addresses from the network interfaces of the referenced Server object.
 func (r *ServerBootConfigurationHTTPReconciler) getSystemNetworkIDsFromServer(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) ([]string, error) {
 	server := &metalv1alpha1.Server{}
+	// Server is cluster-scoped, so no namespace in ObjectKey
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
 		return nil, fmt.Errorf("failed to get Server: %w", err)
 	}

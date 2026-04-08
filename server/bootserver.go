@@ -532,6 +532,13 @@ func SetStatusCondition(ctx context.Context, k8sClient client.Client, log logr.L
 			log.Error(err, "Failed to set the condition in the HTTPBootConfig status")
 			return err
 		}
+	case *bootv1alpha1.VirtualMediaBootConfig:
+		base := resource.DeepCopy()
+		resource.Status.Conditions = updateCondition(resource.Status.Conditions, condition)
+		if err := k8sClient.Status().Patch(ctx, resource, client.MergeFrom(base)); err != nil {
+			log.Error(err, "Failed to set the condition in the VirtualMediaBootConfig status")
+			return err
+		}
 	default:
 		log.Error(fmt.Errorf("unsupported resource type"), "Failed to set the condition")
 		return fmt.Errorf("unsupported resource type")

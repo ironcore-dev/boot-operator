@@ -73,6 +73,12 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 		return r.patchStatusError(ctx, config)
 	}
 
+	// Verify SystemUUID is set
+	if config.Spec.SystemUUID == "" {
+		log.Error(nil, "SystemUUID is empty")
+		return r.patchStatusError(ctx, config)
+	}
+
 	// Verify if the IgnitionRef is set, and it has the intended data key
 	if config.Spec.IgnitionSecretRef != nil {
 		ignitionSecret := &corev1.Secret{}
@@ -107,14 +113,12 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 }
 
 func (r *VirtualMediaBootConfigReconciler) constructBootISOURL(ctx context.Context, imageRef string) (string, error) {
-	// Parse image reference: registry/image:tag
-	imageDetails := strings.Split(imageRef, ":")
-	if len(imageDetails) < 2 {
-		return "", fmt.Errorf("invalid image format: missing tag")
+	// Parse image reference properly using the reference library
+	// This correctly handles registry ports (e.g., registry.example.com:5000/image:v1.0)
+	imageName, version, err := ParseImageReference(imageRef)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse image reference: %w", err)
 	}
-
-	version := imageDetails[len(imageDetails)-1]
-	imageName := strings.TrimSuffix(imageRef, ":"+version)
 
 	// Get ISO layer digest from OCI manifest
 	isoLayerDigest, err := r.getISOLayerDigest(ctx, imageName, version)

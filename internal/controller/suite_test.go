@@ -153,7 +153,7 @@ func SetupTest() *corev1.Namespace {
 		Expect((&ServerBootConfigurationPXEReconciler{
 			Client:            k8sManager.GetClient(),
 			Scheme:            k8sManager.GetScheme(),
-			IPXEServiceURL:    "http://localhost:5000",
+			IPXEServiceURL:    "http://localhost:8082",
 			Architecture:      runtime.GOARCH,
 			RegistryValidator: registryValidator,
 		}).SetupWithManager(k8sManager)).To(Succeed())
@@ -161,22 +161,20 @@ func SetupTest() *corev1.Namespace {
 		Expect((&ServerBootConfigurationHTTPReconciler{
 			Client:            k8sManager.GetClient(),
 			Scheme:            k8sManager.GetScheme(),
-			ImageServerURL:    "http://localhost:5000/httpboot",
+			ImageServerURL:    "http://localhost:8083",
 			Architecture:      runtime.GOARCH,
 			RegistryValidator: registryValidator,
 		}).SetupWithManager(k8sManager)).To(Succeed())
-
-		Expect((&VirtualMediaBootConfigReconciler{
-			Client:               k8sManager.GetClient(),
-			Scheme:               k8sManager.GetScheme(),
-			ImageServerURL:       "http://localhost:5000/httpboot",
-			ConfigDriveServerURL: "http://localhost:5000",
-			Architecture:         runtime.GOARCH,
-		}).SetupWithManager(k8sManager)).To(Succeed())
-
 		Expect((&ServerBootConfigurationVirtualMediaReconciler{
 			Client: k8sManager.GetClient(),
 			Scheme: k8sManager.GetScheme(),
+		}).SetupWithManager(k8sManager)).To(Succeed())
+		Expect((&VirtualMediaBootConfigReconciler{
+			Client:               k8sManager.GetClient(),
+			Scheme:               k8sManager.GetScheme(),
+			ImageServerURL:       "http://localhost:8083",
+			ConfigDriveServerURL: "http://localhost:8082",
+			Architecture:         runtime.GOARCH,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
 		go func() {

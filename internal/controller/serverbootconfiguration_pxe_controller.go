@@ -21,12 +21,14 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/api/errors"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	"github.com/ironcore-dev/boot-operator/internal/oci"
 	"github.com/ironcore-dev/boot-operator/internal/registry"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -87,6 +89,17 @@ func (r *ServerBootConfigurationPXEReconciler) reconcileExists(ctx context.Conte
 	// Only handle PXE boot method (also handle empty/unset for backward compatibility)
 	if config.Spec.BootMethod != "" && config.Spec.BootMethod != metalv1alpha1.BootMethodPXE {
 		log.V(1).Info("Skipping ServerBootConfiguration, not PXE boot method", "bootMethod", config.Spec.BootMethod)
+		// Cleanup any existing IPXEBootConfig before skipping
+		ipxeBootConfig := &bootv1alpha1.IPXEBootConfig{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: config.Namespace, Name: config.Name}, ipxeBootConfig); err == nil {
+			if err := r.Delete(ctx, ipxeBootConfig); err != nil {
+				log.Error(err, "Failed to delete IPXEBootConfig during boot method change")
+				return ctrl.Result{}, err
+			}
+			log.V(1).Info("Deleted IPXEBootConfig due to boot method change")
+		} else if !errors.IsNotFound(err) {
+			return ctrl.Result{}, fmt.Errorf("failed to check for existing IPXEBootConfig: %w", err)
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -122,7 +135,7 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 	}
 	log.V(1).Info("Extracted OS image layer details")
 
-	config := &v1alpha1.IPXEBootConfig{
+	config := &bootv1alpha1.IPXEBootConfig{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "boot.ironcore.dev/v1alpha1",
 			Kind:       "IPXEBootConfig",
@@ -131,7 +144,7 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 			Namespace: bootConfig.Namespace,
 			Name:      bootConfig.Name,
 		},
-		Spec: v1alpha1.IPXEBootConfigSpec{
+		Spec: bootv1alpha1.IPXEBootConfigSpec{
 			SystemUUID:  systemUUID,
 			SystemIPs:   systemIPs,
 			KernelURL:   kernelURL,
@@ -139,8 +152,10 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 			SquashfsURL: squashFSURL,
 		},
 	}
+	// Deep copy IgnitionSecretRef to avoid pointer aliasing
 	if bootConfig.Spec.IgnitionSecretRef != nil {
-		config.Spec.IgnitionSecretRef = bootConfig.Spec.IgnitionSecretRef
+		secretRef := *bootConfig.Spec.IgnitionSecretRef
+		config.Spec.IgnitionSecretRef = &secretRef
 	}
 
 	if err := controllerutil.SetControllerReference(bootConfig, config, r.Scheme); err != nil {
@@ -170,15 +185,15 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 	return ctrl.Result{}, nil
 }
 
-func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx context.Context, config *v1alpha1.IPXEBootConfig, bootConfig *metalv1alpha1.ServerBootConfiguration) error {
+func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx context.Context, config *bootv1alpha1.IPXEBootConfig, bootConfig *metalv1alpha1.ServerBootConfiguration) error {
 	bootConfigBase := bootConfig.DeepCopy()
 
 	switch config.Status.State {
-	case v1alpha1.IPXEBootConfigStateReady:
+	case bootv1alpha1.IPXEBootConfigStateReady:
 		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
 		// Remove ImageValidation condition when transitioning to Ready
 		apimeta.RemoveStatusCondition(&bootConfig.Status.Conditions, "ImageValidation")
-	case v1alpha1.IPXEBootConfigStateError:
+	case bootv1alpha1.IPXEBootConfigStateError:
 		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStateError
 	}
 
@@ -191,6 +206,7 @@ func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx
 
 func (r *ServerBootConfigurationPXEReconciler) getSystemUUIDFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {
 	server := &metalv1alpha1.Server{}
+	// Server is cluster-scoped, so no namespace in ObjectKey
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
 		return "", err
 	}
@@ -200,6 +216,7 @@ func (r *ServerBootConfigurationPXEReconciler) getSystemUUIDFromBootConfig(ctx c
 
 func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) ([]string, error) {
 	server := &metalv1alpha1.Server{}
+	// Server is cluster-scoped, so no namespace in ObjectKey
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
 		return nil, err
 	}
@@ -278,7 +295,7 @@ func (r *ServerBootConfigurationPXEReconciler) enqueueServerBootConfigFromIgniti
 func (r *ServerBootConfigurationPXEReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&metalv1alpha1.ServerBootConfiguration{}).
-		Owns(&v1alpha1.IPXEBootConfig{}).
+		Owns(&bootv1alpha1.IPXEBootConfig{}).
 		Watches(
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.enqueueServerBootConfigFromIgnitionSecret),

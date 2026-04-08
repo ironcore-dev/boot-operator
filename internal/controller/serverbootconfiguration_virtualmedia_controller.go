@@ -91,7 +91,13 @@ func (r *ServerBootConfigurationVirtualMediaReconciler) reconcile(ctx context.Co
 	_, err = controllerutil.CreateOrUpdate(ctx, r.Client, virtualMediaConfig, func() error {
 		virtualMediaConfig.Spec.SystemUUID = systemUUID
 		virtualMediaConfig.Spec.BootImageRef = config.Spec.Image
-		virtualMediaConfig.Spec.IgnitionSecretRef = config.Spec.IgnitionSecretRef
+		// Deep copy IgnitionSecretRef to avoid pointer aliasing
+		if config.Spec.IgnitionSecretRef != nil {
+			secretRef := *config.Spec.IgnitionSecretRef
+			virtualMediaConfig.Spec.IgnitionSecretRef = &secretRef
+		} else {
+			virtualMediaConfig.Spec.IgnitionSecretRef = nil
+		}
 
 		// Set owner reference for automatic cleanup
 		if err := controllerutil.SetControllerReference(config, virtualMediaConfig, r.Scheme); err != nil {
@@ -130,6 +136,7 @@ func (r *ServerBootConfigurationVirtualMediaReconciler) reconcile(ctx context.Co
 
 func (r *ServerBootConfigurationVirtualMediaReconciler) getSystemUUIDFromServer(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {
 	server := &metalv1alpha1.Server{}
+	// Server is cluster-scoped, so no namespace in ObjectKey
 	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
 		return "", fmt.Errorf("failed to get server: %w", err)
 	}
