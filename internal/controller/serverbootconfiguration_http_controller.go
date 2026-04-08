@@ -174,6 +174,23 @@ func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ct
 	}
 	base := cur.DeepCopy()
 
+	// Check if child status reflects current generation
+	// Only mirror status if child has reconciled the current spec
+	childStatusCurrent := false
+	for _, c := range httpBootConfig.Status.Conditions {
+		if c.ObservedGeneration == httpBootConfig.Generation {
+			childStatusCurrent = true
+			break
+		}
+	}
+
+	// If child hasn't reconciled current generation, set parent to Pending
+	// to avoid mirroring stale Ready/Error status from previous generation
+	if !childStatusCurrent {
+		cur.Status.State = metalv1alpha1.ServerBootConfigurationStatePending
+		return r.Status().Patch(ctx, &cur, client.MergeFrom(base))
+	}
+
 	switch httpBootConfig.Status.State {
 	case bootv1alpha1.HTTPBootConfigStateReady:
 		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
@@ -181,6 +198,8 @@ func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ct
 		apimeta.RemoveStatusCondition(&cur.Status.Conditions, "ImageValidation")
 	case bootv1alpha1.HTTPBootConfigStateError:
 		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateError
+	case bootv1alpha1.HTTPBootConfigStatePending:
+		cur.Status.State = metalv1alpha1.ServerBootConfigurationStatePending
 	}
 
 	for _, c := range httpBootConfig.Status.Conditions {

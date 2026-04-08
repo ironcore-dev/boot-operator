@@ -189,6 +189,23 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx context.Context, config *bootv1alpha1.IPXEBootConfig, bootConfig *metalv1alpha1.ServerBootConfiguration) error {
 	bootConfigBase := bootConfig.DeepCopy()
 
+	// Check if child status reflects current generation
+	// Only mirror status if child has reconciled the current spec
+	childStatusCurrent := false
+	for _, c := range config.Status.Conditions {
+		if c.ObservedGeneration == config.Generation {
+			childStatusCurrent = true
+			break
+		}
+	}
+
+	// If child hasn't reconciled current generation, set parent to Pending
+	// to avoid mirroring stale Ready/Error status from previous generation
+	if !childStatusCurrent {
+		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStatePending
+		return r.Status().Patch(ctx, bootConfig, client.MergeFrom(bootConfigBase))
+	}
+
 	switch config.Status.State {
 	case bootv1alpha1.IPXEBootConfigStateReady:
 		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
@@ -196,6 +213,8 @@ func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx
 		apimeta.RemoveStatusCondition(&bootConfig.Status.Conditions, "ImageValidation")
 	case bootv1alpha1.IPXEBootConfigStateError:
 		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStateError
+	case bootv1alpha1.IPXEBootConfigStatePending:
+		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStatePending
 	}
 
 	for _, c := range config.Status.Conditions {

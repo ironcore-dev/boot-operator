@@ -171,6 +171,25 @@ func (r *ServerBootConfigurationVirtualMediaReconciler) patchConfigStateFromVirt
 	}
 	base := cur.DeepCopy()
 
+	// Check if child status reflects current generation
+	// Only mirror status if child has reconciled the current spec
+	childStatusCurrent := false
+	for _, c := range virtualMediaConfig.Status.Conditions {
+		if c.ObservedGeneration == virtualMediaConfig.Generation {
+			childStatusCurrent = true
+			break
+		}
+	}
+
+	// If child hasn't reconciled current generation, set parent to Pending
+	// to avoid mirroring stale Ready/Error status from previous generation
+	if !childStatusCurrent {
+		cur.Status.State = metalv1alpha1.ServerBootConfigurationStatePending
+		cur.Status.BootISOURL = ""
+		cur.Status.ConfigISOURL = ""
+		return r.Status().Patch(ctx, &cur, client.MergeFrom(base))
+	}
+
 	// Map VirtualMediaBootConfig state to ServerBootConfiguration state
 	switch virtualMediaConfig.Status.State {
 	case bootv1alpha1.VirtualMediaBootConfigStateReady:

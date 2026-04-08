@@ -5,18 +5,16 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 
-	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
 	"github.com/go-logr/logr"
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	"github.com/ironcore-dev/boot-operator/internal/oci"
 	"github.com/ironcore-dev/boot-operator/internal/registry"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,9 +27,6 @@ import (
 
 const (
 	MediaTypeISO = "application/vnd.ironcore.image.iso"
-	// MediaTypeDockerManifestList represents Docker's multi-architecture manifest list format.
-	// This is structurally compatible with OCI Image Index but uses a different media type.
-	MediaTypeDockerManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
 )
 
 // VirtualMediaBootConfigReconciler reconciles a VirtualMediaBootConfig object
@@ -101,7 +96,13 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 		ignitionSecret := &corev1.Secret{}
 		if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.IgnitionSecretRef.Name, Namespace: config.Namespace}, ignitionSecret); err != nil {
 			log.Error(err, "Failed to get ignition secret")
-			return r.patchStatusError(ctx, config, fmt.Errorf("failed to get ignition secret: %w", err))
+			// Only treat NotFound as a permanent error (set Error state, no requeue)
+			// Other errors (API timeout, cache issues) are transient - requeue for retry
+			if errors.IsNotFound(err) {
+				return r.patchStatusError(ctx, config, fmt.Errorf("ignition secret not found: %w", err))
+			}
+			// Transient error - return error to trigger requeue without patching status
+			return ctrl.Result{}, fmt.Errorf("failed to get ignition secret: %w", err)
 		}
 		if ignitionSecret.Data[bootv1alpha1.DefaultIgnitionKey] == nil {
 			err := fmt.Errorf("ignition data is missing in secret %s", config.Spec.IgnitionSecretRef.Name)
@@ -185,43 +186,13 @@ func (r *VirtualMediaBootConfigReconciler) getISOLayerDigest(ctx context.Context
 		return "", fmt.Errorf("failed to resolve image reference: %w", err)
 	}
 
-	manifestData, err := r.fetchContent(ctx, resolver, name, desc)
+	// Use shared OCI manifest resolution helper that supports both modern platform-based
+	// selection and legacy CNAME-prefix fallback (for garden-linux compatibility)
+	manifest, err := oci.FindManifestByArchitecture(ctx, resolver, name, desc, r.Architecture, oci.FindManifestOptions{
+		EnableCNAMECompat: false, // VirtualMedia doesn't currently need legacy compatibility
+	})
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch manifest data: %w", err)
-	}
-
-	var manifest ocispec.Manifest
-	// Handle both OCI Image Index and Docker Manifest List (both are multi-arch formats)
-	if desc.MediaType == ocispec.MediaTypeImageIndex || desc.MediaType == MediaTypeDockerManifestList {
-		var indexManifest ocispec.Index
-		if err := json.Unmarshal(manifestData, &indexManifest); err != nil {
-			return "", fmt.Errorf("failed to unmarshal index manifest: %w", err)
-		}
-
-		var targetManifestDesc ocispec.Descriptor
-		for _, manifest := range indexManifest.Manifests {
-			platform := manifest.Platform
-			if manifest.Platform != nil && platform.Architecture == r.Architecture {
-				targetManifestDesc = manifest
-				break
-			}
-		}
-		if targetManifestDesc.Digest == "" {
-			return "", fmt.Errorf("failed to find target manifest with architecture %s", r.Architecture)
-		}
-
-		nestedData, err := r.fetchContent(ctx, resolver, name, targetManifestDesc)
-		if err != nil {
-			return "", fmt.Errorf("failed to fetch nested manifest: %w", err)
-		}
-
-		if err := json.Unmarshal(nestedData, &manifest); err != nil {
-			return "", fmt.Errorf("failed to unmarshal nested manifest: %w", err)
-		}
-	} else {
-		if err := json.Unmarshal(manifestData, &manifest); err != nil {
-			return "", fmt.Errorf("failed to unmarshal manifest: %w", err)
-		}
+		return "", fmt.Errorf("failed to find manifest for architecture %s: %w", r.Architecture, err)
 	}
 
 	var firstLayer string
@@ -253,32 +224,6 @@ func (r *VirtualMediaBootConfigReconciler) getISOLayerDigest(ctx context.Context
 	}
 
 	return "", fmt.Errorf("no ISO layer found in image")
-}
-
-// fetchContent fetches content from an OCI registry using the provided resolver and descriptor.
-func (r *VirtualMediaBootConfigReconciler) fetchContent(ctx context.Context, resolver remotes.Resolver, ref string, desc ocispec.Descriptor) ([]byte, error) {
-	fetcher, err := resolver.Fetcher(ctx, ref)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get fetcher: %w", err)
-	}
-
-	reader, err := fetcher.Fetch(ctx, desc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch content: %w", err)
-	}
-
-	defer func() {
-		if cerr := reader.Close(); cerr != nil {
-			fmt.Printf("failed to close reader: %v\n", cerr)
-		}
-	}()
-
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read content: %w", err)
-	}
-
-	return data, nil
 }
 
 // patchStatusError patches the VirtualMediaBootConfig status to Error state, clears stale URLs,
