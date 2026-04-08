@@ -143,6 +143,7 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 	return ctrl.Result{}, nil
 }
 
+// constructBootISOURL constructs the boot ISO URL from an OCI image reference.
 func (r *VirtualMediaBootConfigReconciler) constructBootISOURL(ctx context.Context, imageRef string) (string, error) {
 	// Parse image reference properly using the reference library
 	// This correctly handles registry ports (e.g., registry.example.com:5000/image:v1.0)
@@ -161,6 +162,7 @@ func (r *VirtualMediaBootConfigReconciler) constructBootISOURL(ctx context.Conte
 		r.ImageServerURL, imageName, version, isoLayerDigest), nil
 }
 
+// getISOLayerDigest retrieves the digest of the ISO layer from an OCI image manifest.
 func (r *VirtualMediaBootConfigReconciler) getISOLayerDigest(ctx context.Context, imageName, version string) (string, error) {
 	imageRef := fmt.Sprintf("%s:%s", imageName, version)
 
@@ -245,6 +247,7 @@ func (r *VirtualMediaBootConfigReconciler) getISOLayerDigest(ctx context.Context
 	return "", fmt.Errorf("no ISO layer found in image")
 }
 
+// fetchContent fetches content from an OCI registry using the provided resolver and descriptor.
 func (r *VirtualMediaBootConfigReconciler) fetchContent(ctx context.Context, resolver remotes.Resolver, ref string, desc ocispec.Descriptor) ([]byte, error) {
 	fetcher, err := resolver.Fetcher(ctx, ref)
 	if err != nil {
@@ -270,6 +273,7 @@ func (r *VirtualMediaBootConfigReconciler) fetchContent(ctx context.Context, res
 	return data, nil
 }
 
+// patchStatusError patches the VirtualMediaBootConfig status to Error state and clears stale URLs.
 func (r *VirtualMediaBootConfigReconciler) patchStatusError(
 	ctx context.Context,
 	config *bootv1alpha1.VirtualMediaBootConfig,
@@ -286,6 +290,7 @@ func (r *VirtualMediaBootConfigReconciler) patchStatusError(
 	return ctrl.Result{}, nil
 }
 
+// patchStatusReady patches the VirtualMediaBootConfig status to Ready state with the provided ISO URLs.
 func (r *VirtualMediaBootConfigReconciler) patchStatusReady(
 	ctx context.Context,
 	config *bootv1alpha1.VirtualMediaBootConfig,
@@ -302,6 +307,8 @@ func (r *VirtualMediaBootConfigReconciler) patchStatusReady(
 	return nil
 }
 
+// enqueueVirtualMediaBootConfigReferencingIgnitionSecret enqueues VirtualMediaBootConfigs
+// that reference the given Secret via IgnitionSecretRef and returns reconcile requests for them.
 func (r *VirtualMediaBootConfigReconciler) enqueueVirtualMediaBootConfigReferencingIgnitionSecret(ctx context.Context, secret client.Object) []reconcile.Request {
 	log := ctrl.LoggerFrom(ctx)
 	secretObj, ok := secret.(*corev1.Secret)

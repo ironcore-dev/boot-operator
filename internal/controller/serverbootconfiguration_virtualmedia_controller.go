@@ -134,6 +134,7 @@ func (r *ServerBootConfigurationVirtualMediaReconciler) reconcile(ctx context.Co
 	return ctrl.Result{}, nil
 }
 
+// getSystemUUIDFromServer retrieves the system UUID from the Server resource referenced by ServerBootConfiguration.
 func (r *ServerBootConfigurationVirtualMediaReconciler) getSystemUUIDFromServer(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {
 	server := &metalv1alpha1.Server{}
 	// Server is cluster-scoped, so no namespace in ObjectKey
@@ -148,6 +149,8 @@ func (r *ServerBootConfigurationVirtualMediaReconciler) getSystemUUIDFromServer(
 	return server.Spec.SystemUUID, nil
 }
 
+// patchConfigStateFromVirtualMediaState syncs the VirtualMediaBootConfig state and ISO URLs
+// back to the ServerBootConfiguration status.
 func (r *ServerBootConfigurationVirtualMediaReconciler) patchConfigStateFromVirtualMediaState(ctx context.Context, virtualMediaConfig *bootv1alpha1.VirtualMediaBootConfig, cfg *metalv1alpha1.ServerBootConfiguration) error {
 	key := types.NamespacedName{Name: cfg.Name, Namespace: cfg.Namespace}
 	var cur metalv1alpha1.ServerBootConfiguration

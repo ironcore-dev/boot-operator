@@ -54,6 +54,7 @@ const (
 	CNAMEPrefixMetalPXE  = "metal_pxe"
 )
 
+// ServerBootConfigurationPXEReconciler watches ServerBootConfiguration and creates IPXEBootConfig for PXE boot.
 type ServerBootConfigurationPXEReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme

@@ -36,6 +36,7 @@ const (
 	MediaTypeUKI = "application/vnd.ironcore.image.uki"
 )
 
+// ServerBootConfigurationHTTPReconciler watches ServerBootConfiguration and creates HTTPBootConfig for HTTP boot.
 type ServerBootConfigurationHTTPReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
