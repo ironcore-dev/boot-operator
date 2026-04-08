@@ -175,6 +175,7 @@ func SetupTest() *corev1.Namespace {
 			ImageServerURL:       "http://localhost:8083",
 			ConfigDriveServerURL: "http://localhost:8082",
 			Architecture:         runtime.GOARCH,
+			RegistryValidator:    registryValidator,
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
 		go func() {

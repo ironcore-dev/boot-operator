@@ -310,6 +310,7 @@ func main() {
 			ImageServerURL:       imageServerURL,
 			ConfigDriveServerURL: ipxeServiceURL, // Config drive served by boot server (same as /ipxe/)
 			Architecture:         architecture,
+			RegistryValidator:    registryValidator,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "VirtualMediaBootConfig")
 			os.Exit(1)

@@ -25,6 +25,9 @@ type FindManifestOptions struct {
 const (
 	annotationCNAME        = "cname"
 	annotationArchitecture = "architecture"
+	// MediaTypeDockerManifestList represents Docker's multi-architecture manifest list format.
+	// This is structurally compatible with OCI Image Index but uses a different media type.
+	MediaTypeDockerManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
 )
 
 // FindManifestByArchitecture navigates an OCI image index to find the manifest for a specific architecture.
@@ -47,8 +50,8 @@ func FindManifestByArchitecture(
 		return ocispec.Manifest{}, fmt.Errorf("failed to unmarshal manifest: %w", err)
 	}
 
-	// If not an index, return the manifest directly.
-	if desc.MediaType != ocispec.MediaTypeImageIndex {
+	// If not an index or manifest list, return the manifest directly.
+	if desc.MediaType != ocispec.MediaTypeImageIndex && desc.MediaType != MediaTypeDockerManifestList {
 		return manifest, nil
 	}
 

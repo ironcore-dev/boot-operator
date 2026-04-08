@@ -120,7 +120,7 @@ var _ = Describe("VirtualMediaBootConfig Controller", func() {
 		Eventually(Object(config)).Should(SatisfyAll(
 			HaveField("Status.State", v1alpha1.VirtualMediaBootConfigStateReady),
 			HaveField("Status.BootISOURL", Not(BeEmpty())),
-			HaveField("Status.ConfigISOURL", Not(BeEmpty())),
+			HaveField("Status.ConfigISOURL", BeEmpty()), // No ignition = no config ISO
 		))
 	})
 })

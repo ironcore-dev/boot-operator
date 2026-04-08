@@ -50,7 +50,6 @@ rules:
   resources:
   - httpbootconfigs/finalizers
   - ipxebootconfigs/finalizers
-  - virtualmediabootconfigs/finalizers
   verbs:
   - update
 - apiGroups:

@@ -119,9 +119,9 @@ var _ = Describe("ServerBootConfigurationVirtualMedia Controller", func() {
 			HaveField("Status.BootISOURL", Not(BeEmpty())),
 		)
 
-		By("ensuring ServerBootConfiguration status has config ISO URL")
-		Eventually(Object(config)).Should(
-			HaveField("Status.ConfigISOURL", ContainSubstring("550e8400-e29b-41d4-a716-446655440000.iso")),
+		By("ensuring ServerBootConfiguration config ISO URL is empty (no ignition configured)")
+		Consistently(Object(config)).Should(
+			HaveField("Status.ConfigISOURL", BeEmpty()),
 		)
 	})
 

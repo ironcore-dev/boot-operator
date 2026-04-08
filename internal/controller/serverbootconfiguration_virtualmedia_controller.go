@@ -165,8 +165,14 @@ func (r *ServerBootConfigurationVirtualMediaReconciler) patchConfigStateFromVirt
 		cur.Status.ConfigISOURL = virtualMediaConfig.Status.ConfigISOURL
 	case bootv1alpha1.VirtualMediaBootConfigStateError:
 		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateError
+		// Clear URLs when not ready - they may be stale or invalid
+		cur.Status.BootISOURL = ""
+		cur.Status.ConfigISOURL = ""
 	case bootv1alpha1.VirtualMediaBootConfigStatePending:
 		cur.Status.State = metalv1alpha1.ServerBootConfigurationStatePending
+		// Clear URLs when not ready - they may be stale or invalid
+		cur.Status.BootISOURL = ""
+		cur.Status.ConfigISOURL = ""
 	}
 
 	// Copy conditions from VirtualMediaBootConfig

@@ -14,6 +14,7 @@ import (
 	"github.com/containerd/containerd/remotes/docker"
 	"github.com/go-logr/logr"
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	"github.com/ironcore-dev/boot-operator/internal/registry"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,6 +27,9 @@ import (
 
 const (
 	MediaTypeISO = "application/vnd.ironcore.image.iso"
+	// MediaTypeDockerManifestList represents Docker's multi-architecture manifest list format.
+	// This is structurally compatible with OCI Image Index but uses a different media type.
+	MediaTypeDockerManifestList = "application/vnd.docker.distribution.manifest.list.v2+json"
 )
 
 // VirtualMediaBootConfigReconciler reconciles a VirtualMediaBootConfig object
@@ -35,11 +39,11 @@ type VirtualMediaBootConfigReconciler struct {
 	ImageServerURL       string
 	ConfigDriveServerURL string
 	Architecture         string
+	RegistryValidator    *registry.Validator
 }
 
-//+kubebuilder:rbac:groups=boot.ironcore.dev,resources=virtualmediabootconfigs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=boot.ironcore.dev,resources=virtualmediabootconfigs,verbs=get;list;watch
 //+kubebuilder:rbac:groups=boot.ironcore.dev,resources=virtualmediabootconfigs/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=boot.ironcore.dev,resources=virtualmediabootconfigs/finalizers,verbs=update
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *VirtualMediaBootConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -79,7 +83,14 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 		return r.patchStatusError(ctx, config)
 	}
 
+	// Verify base URLs are configured
+	if r.ImageServerURL == "" {
+		log.Error(nil, "ImageServerURL is not configured")
+		return r.patchStatusError(ctx, config)
+	}
+
 	// Verify if the IgnitionRef is set, and it has the intended data key
+	hasIgnition := false
 	if config.Spec.IgnitionSecretRef != nil {
 		ignitionSecret := &corev1.Secret{}
 		if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.IgnitionSecretRef.Name, Namespace: config.Namespace}, ignitionSecret); err != nil {
@@ -90,6 +101,7 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 			log.Error(nil, "Ignition data is missing in secret")
 			return r.patchStatusError(ctx, config)
 		}
+		hasIgnition = true
 	}
 
 	// Construct ISO URLs
@@ -97,11 +109,30 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 	bootISOURL, err := r.constructBootISOURL(ctx, config.Spec.BootImageRef)
 	if err != nil {
 		log.Error(err, "Failed to construct boot ISO URL")
-		return r.patchStatusError(ctx, config)
+		// Patch status to Error state
+		if _, patchErr := r.patchStatusError(ctx, config); patchErr != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch status to error: %w (original error: %w)", patchErr, err)
+		}
+		// For transient I/O errors (registry unreachable, network timeout), return error to trigger requeue
+		// For permanent validation errors (registry not allowed), the error has been recorded and no requeue is needed
+		// Check if it's a validation error by checking if "registry validation failed" is in the error message
+		if isRegistryValidationError(err) {
+			// Permanent validation error - don't requeue
+			return ctrl.Result{}, nil
+		}
+		// Transient error - requeue with exponential backoff
+		return ctrl.Result{}, err
 	}
 
-	// Config drive ISO URL uses the SystemUUID for identification
-	configISOURL := fmt.Sprintf("%s/config-drive/%s.iso", r.ConfigDriveServerURL, config.Spec.SystemUUID)
+	// Config drive ISO URL is only set when ignition data is available
+	var configISOURL string
+	if hasIgnition {
+		if r.ConfigDriveServerURL == "" {
+			log.Error(nil, "ConfigDriveServerURL is not configured but ignition data is present")
+			return r.patchStatusError(ctx, config)
+		}
+		configISOURL = fmt.Sprintf("%s/config-drive/%s.iso", r.ConfigDriveServerURL, config.Spec.SystemUUID)
+	}
 
 	// Update status with URLs
 	if err := r.patchStatusReady(ctx, config, bootISOURL, configISOURL); err != nil {
@@ -131,8 +162,14 @@ func (r *VirtualMediaBootConfigReconciler) constructBootISOURL(ctx context.Conte
 }
 
 func (r *VirtualMediaBootConfigReconciler) getISOLayerDigest(ctx context.Context, imageName, version string) (string, error) {
-	resolver := docker.NewResolver(docker.ResolverOptions{})
 	imageRef := fmt.Sprintf("%s:%s", imageName, version)
+
+	// Validate registry against allowlist before resolving
+	if err := r.RegistryValidator.ValidateImageRegistry(imageRef); err != nil {
+		return "", fmt.Errorf("registry validation failed: %w", err)
+	}
+
+	resolver := docker.NewResolver(docker.ResolverOptions{})
 	name, desc, err := resolver.Resolve(ctx, imageRef)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve image reference: %w", err)
@@ -144,7 +181,8 @@ func (r *VirtualMediaBootConfigReconciler) getISOLayerDigest(ctx context.Context
 	}
 
 	var manifest ocispec.Manifest
-	if desc.MediaType == ocispec.MediaTypeImageIndex {
+	// Handle both OCI Image Index and Docker Manifest List (both are multi-arch formats)
+	if desc.MediaType == ocispec.MediaTypeImageIndex || desc.MediaType == MediaTypeDockerManifestList {
 		var indexManifest ocispec.Index
 		if err := json.Unmarshal(manifestData, &indexManifest); err != nil {
 			return "", fmt.Errorf("failed to unmarshal index manifest: %w", err)
@@ -238,6 +276,9 @@ func (r *VirtualMediaBootConfigReconciler) patchStatusError(
 ) (ctrl.Result, error) {
 	base := config.DeepCopy()
 	config.Status.State = bootv1alpha1.VirtualMediaBootConfigStateError
+	// Clear stale URLs when moving to Error state - they may be invalid or outdated
+	config.Status.BootISOURL = ""
+	config.Status.ConfigISOURL = ""
 
 	if err := r.Status().Patch(ctx, config, client.MergeFrom(base)); err != nil {
 		return ctrl.Result{}, fmt.Errorf("error patching VirtualMediaBootConfig status: %w", err)
@@ -287,6 +328,18 @@ func (r *VirtualMediaBootConfigReconciler) enqueueVirtualMediaBootConfigReferenc
 		}
 	}
 	return requests
+}
+
+// isRegistryValidationError checks if an error is a permanent registry validation error
+// (e.g., registry not in allowlist) vs a transient I/O error (e.g., network timeout).
+// Validation errors should not trigger requeue, while I/O errors should.
+func isRegistryValidationError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Check if the error message contains "registry validation failed"
+	// This indicates a permanent configuration error, not a transient failure
+	return strings.Contains(err.Error(), "registry validation failed")
 }
 
 // SetupWithManager sets up the controller with the Manager.
