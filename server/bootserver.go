@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 
 	iso9660 "github.com/kdomanski/iso9660"
 	corev1 "k8s.io/api/core/v1"
@@ -49,7 +50,15 @@ var predefinedConditions = map[string]v1.Condition{
 		Reason:  "IPXEScriptDelivered",
 		Message: "IPXE script has been successfully delivered to the client.",
 	},
+	"ConfigDriveFetched": {
+		Type:    "ConfigDriveFetched",
+		Status:  v1.ConditionTrue,
+		Reason:  "ConfigDriveDelivered",
+		Message: "Config drive ISO has been successfully delivered to the client.",
+	},
 }
+
+var configDriveCache *ConfigDriveCache
 
 func RunBootServer(
 	ipxeServerAddr string,
@@ -62,6 +71,9 @@ func RunBootServer(
 	imageServerURL string,
 	architecture string,
 ) error {
+	// Initialize config drive cache with 10 minute TTL and 100MB max size
+	configDriveCache = NewConfigDriveCache(10*time.Minute, 100*1024*1024)
+
 	http.HandleFunc("/ipxe/", func(w http.ResponseWriter, r *http.Request) {
 		handleIPXE(w, r, k8sClient, log, ipxeServiceURL)
 	})
@@ -562,6 +574,26 @@ func handleConfigDrive(w http.ResponseWriter, r *http.Request, k8sClient client.
 	}
 
 	if len(configList.Items) == 0 {
+		// Some OSes standardize SystemUUIDs to uppercase, which may cause mismatches
+		err = k8sClient.List(ctx, configList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToUpper(uuid)})
+		if err != nil {
+			log.Error(err, "Failed to list VirtualMediaBootConfig with uppercase UUID", "uuid", uuid)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if len(configList.Items) == 0 {
+		// Some OSes standardize SystemUUIDs to lowercase, which may cause mismatches
+		err = k8sClient.List(ctx, configList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToLower(uuid)})
+		if err != nil {
+			log.Error(err, "Failed to list VirtualMediaBootConfig with lowercase UUID", "uuid", uuid)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if len(configList.Items) == 0 {
 		log.Info("No VirtualMediaBootConfig found for UUID", "uuid", uuid)
 		http.Error(w, "Not Found", http.StatusNotFound)
 		return
@@ -595,19 +627,53 @@ func handleConfigDrive(w http.ResponseWriter, r *http.Request, k8sClient client.
 		return
 	}
 
-	// Generate config drive ISO
-	isoData, err := generateConfigDriveISO(ignitionData)
-	if err != nil {
-		log.Error(err, "Failed to generate config drive ISO")
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
+	// Cache key based on VirtualMediaBootConfig UID + Secret ResourceVersion for automatic invalidation
+	cacheKey := fmt.Sprintf("%s-%s", string(config.UID), secret.ResourceVersion)
+	var isoData []byte
+
+	if cachedISO, found := configDriveCache.Get(cacheKey); found {
+		log.V(1).Info("Serving config drive ISO from cache", "uuid", uuid, "cacheKey", cacheKey)
+		isoData = cachedISO
+	} else {
+		// Check format and convert FCOS YAML to Ignition JSON if needed
+		format := string(secret.Data[bootv1alpha1.DefaultFormatKey])
+		var ignitionJSONData []byte
+		switch strings.TrimSpace(format) {
+		case bootv1alpha1.FCOSFormat:
+			ignitionJSONData, err = renderIgnition(ignitionData)
+			if err != nil {
+				log.Error(err, "Failed to render ignition data to JSON", "format", format)
+				http.Error(w, "Internal Server Error: Ignition conversion failed", http.StatusInternalServerError)
+				return
+			}
+			log.V(1).Info("Converted FCOS/Butane YAML to Ignition JSON", "uuid", uuid)
+		default:
+			ignitionJSONData = ignitionData
+		}
+
+		// Generate config drive ISO
+		isoData, err = generateConfigDriveISO(ignitionJSONData)
+		if err != nil {
+			log.Error(err, "Failed to generate config drive ISO")
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		// Cache the generated ISO for subsequent requests
+		configDriveCache.Set(cacheKey, isoData, secret.ResourceVersion)
+		log.Info("Successfully generated and cached config drive ISO", "uuid", uuid, "size", len(isoData), "cacheKey", cacheKey)
 	}
 
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%s.iso", uuid))
-	w.WriteHeader(http.StatusOK)
-	w.Write(isoData)
+	// Use http.ServeContent to properly handle HTTP Range requests for QEMU
+	reader := bytes.NewReader(isoData)
+	http.ServeContent(w, r, fmt.Sprintf("%s.iso", uuid), time.Time{}, reader)
 	log.V(1).Info("Config drive ISO served successfully", "uuid", uuid, "size", len(isoData))
+
+	// Set status condition to indicate config drive was fetched
+	err = SetStatusCondition(ctx, k8sClient, log, &config, "ConfigDriveFetched")
+	if err != nil {
+		log.Error(err, "Failed to set ConfigDriveFetched status condition")
+	}
 }
 
 func generateConfigDriveISO(ignitionData []byte) ([]byte, error) {

@@ -308,7 +308,7 @@ func main() {
 			Client:               mgr.GetClient(),
 			Scheme:               mgr.GetScheme(),
 			ImageServerURL:       imageServerURL,
-			ConfigDriveServerURL: ipxeServiceURL,
+			ConfigDriveServerURL: imageServerURL, // Config drive served by image server, not iPXE service
 			Architecture:         architecture,
 		}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create controller", "controller", "VirtualMediaBootConfig")
@@ -433,6 +433,18 @@ func IndexHTTPBootConfigByNetworkIDs(ctx context.Context, mgr ctrl.Manager) erro
 		func(Obj client.Object) []string {
 			HTTPBootConfig := Obj.(*bootv1alpha1.HTTPBootConfig)
 			return HTTPBootConfig.Spec.NetworkIdentifiers
+		},
+	)
+}
+
+func IndexVirtualMediaBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) error {
+	return mgr.GetFieldIndexer().IndexField(
+		ctx,
+		&bootv1alpha1.VirtualMediaBootConfig{},
+		bootv1alpha1.SystemUUIDIndexKey,
+		func(Obj client.Object) []string {
+			config := Obj.(*bootv1alpha1.VirtualMediaBootConfig)
+			return []string{config.Spec.SystemUUID}
 		},
 	)
 }
