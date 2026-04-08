@@ -41,6 +41,11 @@ var _ = BeforeSuite(func() {
 
 	k8sClient = fake.NewClientBuilder().
 		WithScheme(scheme).
+		WithStatusSubresource(
+			&bootv1alpha1.IPXEBootConfig{},
+			&bootv1alpha1.HTTPBootConfig{},
+			&bootv1alpha1.VirtualMediaBootConfig{},
+		).
 		Build()
 
 	errCh := make(chan error, 1)

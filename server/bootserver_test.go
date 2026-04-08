@@ -115,5 +115,85 @@ systemd:
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported resource type"))
 		})
+
+		It("sets ConfigDriveFetched condition on a VirtualMediaBootConfig", func() {
+			cfg := &bootv1alpha1.VirtualMediaBootConfig{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "vm-config-cond",
+					Namespace: "default",
+				},
+			}
+			Expect(k8sClient.Create(context.Background(), cfg)).To(Succeed())
+
+			err := SetStatusCondition(
+				context.Background(),
+				k8sClient,
+				testLog,
+				cfg,
+				"ConfigDriveFetched",
+			)
+
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("returns an error for unknown condition type on VirtualMediaBootConfig", func() {
+			cfg := &bootv1alpha1.VirtualMediaBootConfig{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "vm-config-bad-cond",
+					Namespace: "default",
+				},
+			}
+			Expect(k8sClient.Create(context.Background(), cfg)).To(Succeed())
+
+			err := SetStatusCondition(
+				context.Background(),
+				k8sClient,
+				testLog,
+				cfg,
+				"UnknownCondition",
+			)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("condition type UnknownCondition not found"))
+		})
+	})
+
+	Describe("generateConfigDriveISO", func() {
+		It("generates a valid ISO from ignition JSON data", func() {
+			ignitionData := []byte(`{"ignition":{"version":"3.0.0"}}`)
+			isoData, err := generateConfigDriveISO(ignitionData)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(isoData).NotTo(BeEmpty())
+			// ISO 9660 images start with 32KB of system area followed by volume descriptor
+			// The magic bytes "CD001" appear at offset 32769 (sector 16 + 1 byte)
+			Expect(len(isoData)).To(BeNumerically(">", 32768))
+		})
+
+		It("generates an ISO that contains the ignition data", func() {
+			ignitionData := []byte(`{"ignition":{"version":"3.0.0"},"storage":{"files":[]}}`)
+			isoData, err := generateConfigDriveISO(ignitionData)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(isoData).NotTo(BeEmpty())
+		})
+
+		It("handles empty ignition data", func() {
+			ignitionData := []byte(`{}`)
+			isoData, err := generateConfigDriveISO(ignitionData)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(isoData).NotTo(BeEmpty())
+		})
+
+		It("generates different ISOs for different ignition data", func() {
+			data1 := []byte(`{"ignition":{"version":"3.0.0"},"variant":"A"}`)
+			data2 := []byte(`{"ignition":{"version":"3.0.0"},"variant":"B"}`)
+
+			iso1, err1 := generateConfigDriveISO(data1)
+			iso2, err2 := generateConfigDriveISO(data2)
+
+			Expect(err1).NotTo(HaveOccurred())
+			Expect(err2).NotTo(HaveOccurred())
+			// Different input should produce different ISO content
+			Expect(iso1).NotTo(Equal(iso2))
+		})
 	})
 })

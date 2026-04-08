@@ -17,6 +17,64 @@ import (
 	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 )
 
+func TestIsRegistryValidationError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "nil error returns false",
+			err:      nil,
+			expected: false,
+		},
+		{
+			name:     "registry validation failed error returns true",
+			err:      errors.New("registry validation failed: registry docker.io is not in the allowed list"),
+			expected: true,
+		},
+		{
+			name:     "error containing registry validation failed substring returns true",
+			err:      errors.New("failed to get ISO layer digest: registry validation failed: not allowed"),
+			expected: true,
+		},
+		{
+			name:     "network error returns false (transient)",
+			err:      errors.New("failed to resolve image reference: connection refused"),
+			expected: false,
+		},
+		{
+			name:     "generic error returns false",
+			err:      errors.New("some other error"),
+			expected: false,
+		},
+		{
+			name:     "empty error message returns false",
+			err:      errors.New(""),
+			expected: false,
+		},
+		{
+			name:     "partial match without registry validation failed returns false",
+			err:      errors.New("registry not found"),
+			expected: false,
+		},
+		{
+			name:     "validation error without registry prefix returns false",
+			err:      errors.New("validation failed: field is required"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isRegistryValidationError(tt.err)
+			if result != tt.expected {
+				t.Errorf("isRegistryValidationError(%v) = %v, want %v", tt.err, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestBuildImageReference(t *testing.T) {
 	tests := []struct {
 		name         string
