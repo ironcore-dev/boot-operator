@@ -17,6 +17,8 @@ import (
 	"github.com/ironcore-dev/boot-operator/internal/registry"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -74,19 +76,23 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 
 	// Verify boot image ref is set
 	if config.Spec.BootImageRef == "" {
-		return r.patchStatusError(ctx, config)
+		err := fmt.Errorf("BootImageRef is required but not set")
+		log.Error(err, "Validation failed")
+		return r.patchStatusError(ctx, config, err)
 	}
 
 	// Verify SystemUUID is set
 	if config.Spec.SystemUUID == "" {
-		log.Error(nil, "SystemUUID is empty")
-		return r.patchStatusError(ctx, config)
+		err := fmt.Errorf("SystemUUID is required but not set")
+		log.Error(err, "Validation failed")
+		return r.patchStatusError(ctx, config, err)
 	}
 
 	// Verify base URLs are configured
 	if r.ImageServerURL == "" {
-		log.Error(nil, "ImageServerURL is not configured")
-		return r.patchStatusError(ctx, config)
+		err := fmt.Errorf("ImageServerURL is not configured")
+		log.Error(err, "Configuration error")
+		return r.patchStatusError(ctx, config, err)
 	}
 
 	// Verify if the IgnitionRef is set, and it has the intended data key
@@ -95,11 +101,12 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 		ignitionSecret := &corev1.Secret{}
 		if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.IgnitionSecretRef.Name, Namespace: config.Namespace}, ignitionSecret); err != nil {
 			log.Error(err, "Failed to get ignition secret")
-			return r.patchStatusError(ctx, config)
+			return r.patchStatusError(ctx, config, fmt.Errorf("failed to get ignition secret: %w", err))
 		}
 		if ignitionSecret.Data[bootv1alpha1.DefaultIgnitionKey] == nil {
-			log.Error(nil, "Ignition data is missing in secret")
-			return r.patchStatusError(ctx, config)
+			err := fmt.Errorf("ignition data is missing in secret %s", config.Spec.IgnitionSecretRef.Name)
+			log.Error(err, "Validation failed")
+			return r.patchStatusError(ctx, config, err)
 		}
 		hasIgnition = true
 	}
@@ -110,7 +117,7 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 	if err != nil {
 		log.Error(err, "Failed to construct boot ISO URL")
 		// Patch status to Error state
-		if _, patchErr := r.patchStatusError(ctx, config); patchErr != nil {
+		if _, patchErr := r.patchStatusError(ctx, config, err); patchErr != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to patch status to error: %w (original error: %w)", patchErr, err)
 		}
 		// For transient I/O errors (registry unreachable, network timeout), return error to trigger requeue
@@ -128,8 +135,9 @@ func (r *VirtualMediaBootConfigReconciler) reconcile(ctx context.Context, log lo
 	var configISOURL string
 	if hasIgnition {
 		if r.ConfigDriveServerURL == "" {
-			log.Error(nil, "ConfigDriveServerURL is not configured but ignition data is present")
-			return r.patchStatusError(ctx, config)
+			err := fmt.Errorf("ConfigDriveServerURL is not configured but ignition data is present")
+			log.Error(err, "Configuration error")
+			return r.patchStatusError(ctx, config, err)
 		}
 		configISOURL = fmt.Sprintf("%s/config-drive/%s.iso", r.ConfigDriveServerURL, config.Spec.SystemUUID)
 	}
@@ -273,10 +281,12 @@ func (r *VirtualMediaBootConfigReconciler) fetchContent(ctx context.Context, res
 	return data, nil
 }
 
-// patchStatusError patches the VirtualMediaBootConfig status to Error state and clears stale URLs.
+// patchStatusError patches the VirtualMediaBootConfig status to Error state, clears stale URLs,
+// and sets an ImageValidation condition with the error details.
 func (r *VirtualMediaBootConfigReconciler) patchStatusError(
 	ctx context.Context,
 	config *bootv1alpha1.VirtualMediaBootConfig,
+	err error,
 ) (ctrl.Result, error) {
 	base := config.DeepCopy()
 	config.Status.State = bootv1alpha1.VirtualMediaBootConfigStateError
@@ -284,13 +294,23 @@ func (r *VirtualMediaBootConfigReconciler) patchStatusError(
 	config.Status.BootISOURL = ""
 	config.Status.ConfigISOURL = ""
 
-	if err := r.Status().Patch(ctx, config, client.MergeFrom(base)); err != nil {
-		return ctrl.Result{}, fmt.Errorf("error patching VirtualMediaBootConfig status: %w", err)
+	// Set ImageValidation condition to False with error details
+	apimeta.SetStatusCondition(&config.Status.Conditions, metav1.Condition{
+		Type:               "ImageValidation",
+		Status:             metav1.ConditionFalse,
+		Reason:             "ValidationFailed",
+		Message:            err.Error(),
+		ObservedGeneration: config.Generation,
+	})
+
+	if patchErr := r.Status().Patch(ctx, config, client.MergeFrom(base)); patchErr != nil {
+		return ctrl.Result{}, fmt.Errorf("error patching VirtualMediaBootConfig status: %w", patchErr)
 	}
 	return ctrl.Result{}, nil
 }
 
-// patchStatusReady patches the VirtualMediaBootConfig status to Ready state with the provided ISO URLs.
+// patchStatusReady patches the VirtualMediaBootConfig status to Ready state with the provided ISO URLs
+// and sets ImageValidation condition to True.
 func (r *VirtualMediaBootConfigReconciler) patchStatusReady(
 	ctx context.Context,
 	config *bootv1alpha1.VirtualMediaBootConfig,
@@ -300,6 +320,15 @@ func (r *VirtualMediaBootConfigReconciler) patchStatusReady(
 	config.Status.State = bootv1alpha1.VirtualMediaBootConfigStateReady
 	config.Status.BootISOURL = bootISOURL
 	config.Status.ConfigISOURL = configISOURL
+
+	// Set ImageValidation condition to True on success
+	apimeta.SetStatusCondition(&config.Status.Conditions, metav1.Condition{
+		Type:               "ImageValidation",
+		Status:             metav1.ConditionTrue,
+		Reason:             "ValidationSucceeded",
+		Message:            "Boot image validated and ISO URLs constructed successfully",
+		ObservedGeneration: config.Generation,
+	})
 
 	if err := r.Status().Patch(ctx, config, client.MergeFrom(base)); err != nil {
 		return fmt.Errorf("error patching VirtualMediaBootConfig status: %w", err)

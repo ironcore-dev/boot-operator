@@ -11,6 +11,7 @@ import (
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -53,6 +54,17 @@ func (r *ServerBootConfigurationVirtualMediaReconciler) reconcileExists(ctx cont
 	// Only handle VirtualMedia boot method
 	if config.Spec.BootMethod != metalv1alpha1.BootMethodVirtualMedia {
 		log.V(1).Info("Skipping ServerBootConfiguration, not VirtualMedia boot method", "bootMethod", config.Spec.BootMethod)
+		// Cleanup any existing VirtualMediaBootConfig before skipping
+		virtualMediaBootConfig := &bootv1alpha1.VirtualMediaBootConfig{}
+		if err := r.Get(ctx, client.ObjectKey{Namespace: config.Namespace, Name: config.Name}, virtualMediaBootConfig); err == nil {
+			if err := r.Delete(ctx, virtualMediaBootConfig); err != nil {
+				log.Error(err, "Failed to delete VirtualMediaBootConfig during boot method change")
+				return ctrl.Result{}, err
+			}
+			log.V(1).Info("Deleted VirtualMediaBootConfig due to boot method change")
+		} else if !errors.IsNotFound(err) {
+			return ctrl.Result{}, fmt.Errorf("failed to check for existing VirtualMediaBootConfig: %w", err)
+		}
 		return ctrl.Result{}, nil
 	}
 	return r.reconcile(ctx, log, config)
@@ -166,6 +178,8 @@ func (r *ServerBootConfigurationVirtualMediaReconciler) patchConfigStateFromVirt
 		// Copy ISO URLs to ServerBootConfiguration status
 		cur.Status.BootISOURL = virtualMediaConfig.Status.BootISOURL
 		cur.Status.ConfigISOURL = virtualMediaConfig.Status.ConfigISOURL
+		// Remove stale error conditions when transitioning to Ready
+		apimeta.RemoveStatusCondition(&cur.Status.Conditions, "ImageValidation")
 	case bootv1alpha1.VirtualMediaBootConfigStateError:
 		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateError
 		// Clear URLs when not ready - they may be stale or invalid
@@ -178,9 +192,12 @@ func (r *ServerBootConfigurationVirtualMediaReconciler) patchConfigStateFromVirt
 		cur.Status.ConfigISOURL = ""
 	}
 
-	// Copy conditions from VirtualMediaBootConfig
+	// Synchronize conditions from VirtualMediaBootConfig to ServerBootConfiguration
+	// Update ObservedGeneration to match parent generation when mirroring conditions
 	for _, c := range virtualMediaConfig.Status.Conditions {
-		apimeta.SetStatusCondition(&cur.Status.Conditions, c)
+		condition := c.DeepCopy()
+		condition.ObservedGeneration = cur.Generation
+		apimeta.SetStatusCondition(&cur.Status.Conditions, *condition)
 	}
 
 	return r.Status().Patch(ctx, &cur, client.MergeFrom(base))
