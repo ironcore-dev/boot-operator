@@ -11,6 +11,7 @@ import (
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +20,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 const (
@@ -35,6 +38,7 @@ type ServerBootConfigurationVirtualMediaReconciler struct {
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=serverbootconfigurations/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=metal.ironcore.dev,resources=servers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=boot.ironcore.dev,resources=virtualmediabootconfigs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 func (r *ServerBootConfigurationVirtualMediaReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
@@ -222,11 +226,19 @@ func (r *ServerBootConfigurationVirtualMediaReconciler) patchConfigStateFromVirt
 	return r.Status().Patch(ctx, &cur, client.MergeFrom(base))
 }
 
+func (r *ServerBootConfigurationVirtualMediaReconciler) enqueueServerBootConfigFromIgnitionSecret(ctx context.Context, secret client.Object) []reconcile.Request {
+	return EnqueueServerBootConfigsReferencingSecret(ctx, r.Client, secret)
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ServerBootConfigurationVirtualMediaReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(ServerBootConfigurationVirtualMediaControllerName).
 		For(&metalv1alpha1.ServerBootConfiguration{}).
 		Owns(&bootv1alpha1.VirtualMediaBootConfig{}).
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueServerBootConfigFromIgnitionSecret),
+		).
 		Complete(r)
 }
