@@ -136,14 +136,15 @@ func main() {
 	}
 
 	// set the correct ipxe service URL by getting the address from the environment
-	var ipxeServiceAddr string
-	if ipxeServiceURL == "" {
-		ipxeServiceAddr = os.Getenv("IPXE_SERVER_ADDRESS")
-		if ipxeServiceAddr == "" {
-			setupLog.Error(nil, "failed to set the ipxe service URL as no address is provided")
-			os.Exit(1)
+	if controllers.Enabled(ipxeBootConfigController) || controllers.Enabled(serverBootConfigControllerPxe) {
+		if ipxeServiceURL == "" {
+			ipxeServiceAddr := os.Getenv("IPXE_SERVER_ADDRESS")
+			if ipxeServiceAddr == "" {
+				setupLog.Error(nil, "failed to set the ipxe service URL as no address is provided")
+				os.Exit(1)
+			}
+			ipxeServiceURL = fmt.Sprintf("%s://%s:%d", ipxeServiceProtocol, ipxeServiceAddr, ipxeServicePort)
 		}
-		ipxeServiceURL = fmt.Sprintf("%s://%s:%d", ipxeServiceProtocol, ipxeServiceAddr, ipxeServicePort)
 	}
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
