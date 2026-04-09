@@ -109,6 +109,10 @@ func RunBootServer(
 
 func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client, log logr.Logger, ipxeServiceURL string) {
 	log.Info("Processing IPXE request", "method", r.Method, "path", r.URL.Path, "clientIP", r.RemoteAddr)
+	if ipxeServiceURL == "" {
+		http.Error(w, "iPXE is disabled", http.StatusServiceUnavailable)
+		return
+	}
 	ctx := r.Context()
 
 	uuid := strings.TrimPrefix(r.URL.Path, "/ipxe/")
