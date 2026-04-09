@@ -202,8 +202,12 @@ func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ct
 		cur.Status.State = metalv1alpha1.ServerBootConfigurationStatePending
 	}
 
+	// Synchronize conditions from HTTPBootConfig to ServerBootConfiguration
+	// Update ObservedGeneration to match parent generation when mirroring conditions
 	for _, c := range httpBootConfig.Status.Conditions {
-		apimeta.SetStatusCondition(&cur.Status.Conditions, c)
+		condition := c.DeepCopy()
+		condition.ObservedGeneration = cur.Generation
+		apimeta.SetStatusCondition(&cur.Status.Conditions, *condition)
 	}
 
 	return r.Status().Patch(ctx, &cur, client.MergeFrom(base))
