@@ -98,3 +98,87 @@ Both CRDs use field indexes (by SystemUUID, IPs, MACs) so the boot server can lo
 - Tests use Ginkgo/Gomega BDD style; suite setup is in `suite_test.go` next to the tests.
 - Kubebuilder markers (`+kubebuilder:rbac:`, `+kubebuilder:object:root=true`, etc.) drive code and manifest generation — keep them accurate.
 - `--default-httpboot-uki-url` is deprecated; use `--default-httpboot-oci-image` instead.
+
+## Git and GitHub Rules
+
+- **Never run `git push` under any circumstances.** The user pushes to GitHub. Do not push branches, force-push, or open/modify PRs without an explicit written instruction that contains the word **"push"** or **"create PR"**. Accepting edits does not constitute approval to push.
+- **Never modify anything on `main` directly.** All work happens on a feature branch.
+- **Do not create, close, or comment on GitHub issues or PRs** unless explicitly asked.
+
+## Change Discipline
+
+Boot-operator has a clear separation of concerns across its controllers. Different controllers are owned and reviewed by different people (HTTPBoot, iPXE, readiness, boot server, etc.). Keep changes scoped and minimal:
+
+- **Touch only what the feature requires.** If a change is in the HTTPBoot controller, do not modify iPXE controller files unless they are directly affected. Unnecessary cross-controller edits increase review noise and risk unintended side effects.
+- **Prefer small, focused PRs.** Each PR should do one thing and be easy to review end-to-end by the relevant owner.
+- **Do not refactor or clean up code outside the scope of the task.** If you notice something worth improving elsewhere, note it but do not act on it without being asked.
+- **No speculative abstractions.** Do not introduce helpers, interfaces, or generalizations for hypothetical future use. Build exactly what the current task requires.
+
+## Status Conditions Pattern
+
+When adding or modifying status conditions on `ServerBootConfiguration`:
+
+- Use `retry.RetryOnConflict` + `client.MergeFrom` for all status patches to avoid lost-update races when two controllers patch the same object concurrently.
+- Never read a child resource's `Status.State` immediately after a spec apply-patch — the child controller hasn't reconciled the new spec yet. Guard with `child.Status.ObservedGeneration < child.Generation` and return `nil` (write nothing) until the child's own status update re-triggers the reconcile via `Owns()`.
+- New child CRD types that feed into a parent condition should expose `ObservedGeneration int64` in their status so converters can detect stale state.
+
+## Documentation
+
+- Keep `CLAUDE.md` and any user-facing docs (under `docs/`) accurate and up to date as features are added or changed.
+- When implementing a new feature, update the relevant section of `CLAUDE.md` (Architecture, CRDs, Key CLI Flags, etc.) if the change introduces new concepts, flags, or behavior.
+- If you notice documentation that is stale or incorrect relative to the current code, fix it.
+
+## Tests
+
+- **Reuse existing test infrastructure.** Each controller package has a `suite_test.go` with shared setup (namespace, manager, mock registry). Add new tests to the existing `*_test.go` files in the same package — do not create separate suites unless there is a clear reason.
+- **Avoid duplication.** Before adding a helper or fixture, check whether an equivalent already exists in the suite. Reuse `SetupTest()`, `MockImageRef()`, and the shared mock registry rather than duplicating them.
+- **Cover happy paths and key edge/failure cases**, but keep each test case focused. A test that clearly expresses one scenario is better than a large table-driven test that obscures intent.
+- **Scope tests to the controller under test.** An HTTPBoot test should not implicitly depend on iPXE controller behavior, and vice versa.
+- **Do not add test-only helpers to non-test packages** (e.g., `PushDualModeImage` in the mock registry). Test helpers belong in `_test.go` files or the `test/` package.
+
+## Mandatory Post-Change Verification
+
+**Once the entire implementation plan is complete, run all of the following commands and fix any failures before presenting the result for review. Do NOT run these after each individual file edit — run them once at the end when all changes are done:**
+
+```bash
+# 1. Regenerate manifests and DeepCopy (ONLY when api/v1alpha1/ types were changed)
+make manifests generate
+
+# 2. Format code
+make fmt
+
+# 3. Run tests
+make test
+
+# 4. Run linter (use lint-fix to auto-fix where possible)
+make lint
+
+# 5. Verify SPDX/license headers on all files
+make check-license
+```
+
+### Rules
+
+- **`make manifests generate`**: Run whenever any file under `api/v1alpha1/` is modified (type fields, kubebuilder markers, etc.). This regenerates CRD YAML and DeepCopy methods.
+- **`make fmt`**: Always run — formats Go code with goimports.
+- **`make test`**: Run once at the end of the complete implementation — must pass with zero failures. Do not run after each individual file edit.
+- **`make lint`**: Always run. Prefer `make lint-fix` to auto-correct fixable issues; manually fix the rest.
+- **`make check-license`**: Always run. For any **new** Go file created, first run `make add-license` to insert the SPDX header, then verify with `make check-license`. New non-Go files that are not covered by an existing `.reuse/dep5` entry also need SPDX coverage — add them to `.reuse/dep5` if they lack inline headers.
+
+## References
+
+### Essential Reading
+- **Kubebuilder Book**: https://book.kubebuilder.io (comprehensive guide)
+- **controller-runtime FAQ**: https://github.com/kubernetes-sigs/controller-runtime/blob/main/FAQ.md (common patterns and questions)
+- **Good Practices**: https://book.kubebuilder.io/reference/good-practices.html (why reconciliation is idempotent, status conditions, etc.)
+- **Logging Conventions**: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/logging.md#message-style-guidelines (message style, verbosity levels)
+
+### API Design & Implementation
+- **API Conventions**: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md
+- **Operator Pattern**: https://kubernetes.io/docs/concepts/extend-kubernetes/operator/
+- **Markers Reference**: https://book.kubebuilder.io/reference/markers.html
+
+### Tools & Libraries
+- **controller-runtime**: https://github.com/kubernetes-sigs/controller-runtime
+- **controller-tools**: https://github.com/kubernetes-sigs/controller-tools
+- **Kubebuilder Repo**: https://github.com/kubernetes-sigs/kubebuilder
