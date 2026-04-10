@@ -4,13 +4,14 @@ permissions:
   contents: read
 
 on:
-  push:
   pull_request:
+    types: [labeled, opened, synchronize, reopened]
 
 jobs:
   test-e2e:
     name: Run on Ubuntu
     runs-on: ubuntu-latest
+    if: contains(github.event.pull_request.labels.*.name, 'ok-to-test')
     steps:
       - name: Clone the code
         uses: actions/checkout@v6
