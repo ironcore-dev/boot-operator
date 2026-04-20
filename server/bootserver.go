@@ -136,7 +136,12 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 		return
 	}
 
-	config := ipxeBootConfigList.Items[0]
+	config, err := selectIPXEBootConfig(ctx, k8sClient, log, ipxeBootConfigList.Items)
+	if err != nil {
+		log.Error(err, "Failed to select IPXEBootConfig")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	if config.Spec.IPXEScriptSecretRef != nil {
 		secret := &corev1.Secret{}
 		err := k8sClient.Get(ctx, types.NamespacedName{Name: config.Spec.IPXEScriptSecretRef.Name, Namespace: config.Namespace}, secret)
@@ -208,7 +213,12 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		return
 	}
 
-	ipxeBootConfig := ipxeBootConfigList.Items[0]
+	ipxeBootConfig, err := selectIPXEBootConfig(ctx, k8sClient, log, ipxeBootConfigList.Items)
+	if err != nil {
+		log.Error(err, "Failed to select IPXEBootConfig")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 
 	ignitionSecret := corev1.Secret{
 		ObjectMeta: v1.ObjectMeta{
@@ -315,7 +325,12 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		return
 	}
 
-	httpBootConfig := HTTPBootConfigList.Items[0]
+	httpBootConfig, err := selectHTTPBootConfig(ctx, k8sClient, log, HTTPBootConfigList.Items)
+	if err != nil {
+		log.Error(err, "Failed to select HTTPBootConfig")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 
 	ignitionSecret := corev1.Secret{
 		ObjectMeta: v1.ObjectMeta{
@@ -465,9 +480,12 @@ func handleHTTPBoot(
 			"UKIURL":    ukiURL,
 		}
 	} else {
-		// TODO: Pick the first HttpBootConfig if multiple CRs are found.
-		// Implement better validation in the future.
-		httpBootConfig := httpBootConfigs.Items[0]
+		httpBootConfig, err := selectHTTPBootConfig(ctx, k8sClient, log, httpBootConfigs.Items)
+		if err != nil {
+			log.Error(err, "Failed to select HTTPBootConfig")
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
 
 		httpBootResponseData = map[string]string{
 			"ClientIPs":  strings.Join(clientIPs, ","),
