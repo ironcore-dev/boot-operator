@@ -8,49 +8,45 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// selectIPXEBootConfig picks the correct IPXEBootConfig when multiple configs
-// match the same server. It resolves the owning Server, filters out orphaned
-// configs, and prefers the maintenance config during maintenance.
-func selectIPXEBootConfig(ctx context.Context, k8sClient client.Client, log logr.Logger, items []bootv1alpha1.IPXEBootConfig) (bootv1alpha1.IPXEBootConfig, error) {
+// selectBootConfig picks the correct boot config when multiple configs match
+// the same server. It resolves the owning Server, filters out orphaned configs,
+// and prefers the maintenance config during maintenance. T must implement
+// client.Object (satisfied by *IPXEBootConfig, *HTTPBootConfig, etc.).
+func selectBootConfig[T client.Object](ctx context.Context, k8sClient client.Client, log logr.Logger, items []T) (T, error) {
+	var zero T
+	if len(items) == 0 {
+		return zero, fmt.Errorf("no boot config items to select from")
+	}
 	if len(items) == 1 {
 		return items[0], nil
 	}
-	log.Info("Multiple IPXEBootConfigs found, resolving preferred config", "count", len(items))
+	log.Info("Multiple boot configs found, resolving preferred config", "count", len(items))
 	sbcNames := make([]string, len(items))
 	for i := range items {
-		sbcNames[i] = ownerSBCName(items[i].OwnerReferences)
+		sbcNames[i] = ownerSBCName(items[i].GetOwnerReferences())
 	}
-	idx, err := preferredBootConfigIndex(ctx, k8sClient, log, items[0].Namespace, sbcNames)
+	idx, err := preferredBootConfigIndex(ctx, k8sClient, log, items[0].GetNamespace(), sbcNames)
 	if err != nil {
-		return bootv1alpha1.IPXEBootConfig{}, err
+		return zero, err
 	}
 	return items[idx], nil
 }
 
-// selectHTTPBootConfig picks the correct HTTPBootConfig when multiple configs
-// match the same server. It resolves the owning Server, filters out orphaned
-// configs, and prefers the maintenance config during maintenance.
-func selectHTTPBootConfig(ctx context.Context, k8sClient client.Client, log logr.Logger, items []bootv1alpha1.HTTPBootConfig) (bootv1alpha1.HTTPBootConfig, error) {
-	if len(items) == 1 {
-		return items[0], nil
-	}
-	log.Info("Multiple HTTPBootConfigs found, resolving preferred config", "count", len(items))
-	sbcNames := make([]string, len(items))
+// toPointers converts a value slice to a pointer slice so that elements
+// satisfy client.Object.
+func toPointers[T any](items []T) []*T {
+	ptrs := make([]*T, len(items))
 	for i := range items {
-		sbcNames[i] = ownerSBCName(items[i].OwnerReferences)
+		ptrs[i] = &items[i]
 	}
-	idx, err := preferredBootConfigIndex(ctx, k8sClient, log, items[0].Namespace, sbcNames)
-	if err != nil {
-		return bootv1alpha1.HTTPBootConfig{}, err
-	}
-	return items[idx], nil
+	return ptrs
 }
 
 // ownerSBCName extracts the ServerBootConfiguration name from an object's
@@ -142,9 +138,11 @@ func resolveServer(ctx context.Context, k8sClient client.Client, namespace strin
 		}
 		sbc := &metalv1alpha1.ServerBootConfiguration{}
 		if err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, sbc); err != nil {
-			// This SBC might be an orphan that's already been deleted.
-			// Try the next one.
-			continue
+			if apierrors.IsNotFound(err) {
+				// This SBC has been deleted (orphaned child). Try the next one.
+				continue
+			}
+			return nil, fmt.Errorf("failed to get ServerBootConfiguration %q: %w", name, err)
 		}
 		server := &metalv1alpha1.Server{}
 		if err := k8sClient.Get(ctx, types.NamespacedName{Name: sbc.Spec.ServerRef.Name}, server); err != nil {

@@ -136,7 +136,7 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 		return
 	}
 
-	config, err := selectIPXEBootConfig(ctx, k8sClient, log, ipxeBootConfigList.Items)
+	config, err := selectBootConfig(ctx, k8sClient, log, toPointers(ipxeBootConfigList.Items))
 	if err != nil {
 		log.Error(err, "Failed to select IPXEBootConfig")
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -172,7 +172,7 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 		IPXEServerURL: ipxeServiceURL,
 	})
 
-	err = SetStatusCondition(ctx, k8sClient, log, &config, "IPXEScriptFetched")
+	err = SetStatusCondition(ctx, k8sClient, log, config, "IPXEScriptFetched")
 	if err != nil {
 		log.Error(err, "Failed to set IPXEScriptFetched status condition")
 	}
@@ -213,7 +213,7 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		return
 	}
 
-	ipxeBootConfig, err := selectIPXEBootConfig(ctx, k8sClient, log, ipxeBootConfigList.Items)
+	ipxeBootConfig, err := selectBootConfig(ctx, k8sClient, log, toPointers(ipxeBootConfigList.Items))
 	if err != nil {
 		log.Error(err, "Failed to select IPXEBootConfig")
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -254,7 +254,7 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		return
 	}
 
-	err = SetStatusCondition(ctx, k8sClient, log, &ipxeBootConfig, "IgnitionDataFetched")
+	err = SetStatusCondition(ctx, k8sClient, log, ipxeBootConfig, "IgnitionDataFetched")
 	if err != nil {
 		log.Error(err, "Failed to set IgnitionDataFetched status condition")
 	}
@@ -325,7 +325,7 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		return
 	}
 
-	httpBootConfig, err := selectHTTPBootConfig(ctx, k8sClient, log, HTTPBootConfigList.Items)
+	httpBootConfig, err := selectBootConfig(ctx, k8sClient, log, toPointers(HTTPBootConfigList.Items))
 	if err != nil {
 		log.Error(err, "Failed to select HTTPBootConfig")
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -366,7 +366,7 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		return
 	}
 
-	err = SetStatusCondition(ctx, k8sClient, log, &httpBootConfig, "IgnitionDataFetched")
+	err = SetStatusCondition(ctx, k8sClient, log, httpBootConfig, "IgnitionDataFetched")
 	if err != nil {
 		log.Error(err, "Failed to set IgnitionDataFetched status condition")
 	}
@@ -480,7 +480,7 @@ func handleHTTPBoot(
 			"UKIURL":    ukiURL,
 		}
 	} else {
-		httpBootConfig, err := selectHTTPBootConfig(ctx, k8sClient, log, httpBootConfigs.Items)
+		httpBootConfig, err := selectBootConfig(ctx, k8sClient, log, toPointers(httpBootConfigs.Items))
 		if err != nil {
 			log.Error(err, "Failed to select HTTPBootConfig")
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)

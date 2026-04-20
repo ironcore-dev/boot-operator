@@ -125,25 +125,84 @@ var _ = Describe("ConfigSelector", func() {
 		log = logr.Discard()
 	)
 
-	Context("selectIPXEBootConfig", func() {
+	Context("selectBootConfig with IPXEBootConfig", func() {
 		It("returns the single item without any lookups", func() {
 			item := bootv1alpha1.IPXEBootConfig{
 				ObjectMeta: v1.ObjectMeta{Name: "cfg-1", Namespace: "default"},
 			}
-			result, err := selectIPXEBootConfig(ctx, newTestClient(), log, []bootv1alpha1.IPXEBootConfig{item})
+			result, err := selectBootConfig(ctx, newTestClient(), log, toPointers([]bootv1alpha1.IPXEBootConfig{item}))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Name).To(Equal("cfg-1"))
 		})
+
+		It("selects the maintenance config from multiple items", func() {
+			server := &metalv1alpha1.Server{
+				ObjectMeta: v1.ObjectMeta{Name: "server-1"},
+				Spec: metalv1alpha1.ServerSpec{
+					BootConfigurationRef:            &metalv1alpha1.ObjectReference{Name: "workload-sbc", Namespace: "default"},
+					MaintenanceBootConfigurationRef: &metalv1alpha1.ObjectReference{Name: "maintenance-sbc", Namespace: "default"},
+				},
+			}
+			workloadSBC := &metalv1alpha1.ServerBootConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "workload-sbc", Namespace: "default"},
+				Spec:       metalv1alpha1.ServerBootConfigurationSpec{ServerRef: corev1.LocalObjectReference{Name: "server-1"}},
+			}
+			maintenanceSBC := &metalv1alpha1.ServerBootConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "maintenance-sbc", Namespace: "default"},
+				Spec:       metalv1alpha1.ServerBootConfigurationSpec{ServerRef: corev1.LocalObjectReference{Name: "server-1"}},
+			}
+			items := []bootv1alpha1.IPXEBootConfig{
+				{ObjectMeta: v1.ObjectMeta{Name: "ipxe-workload", Namespace: "default", OwnerReferences: []v1.OwnerReference{
+					{APIVersion: "metal.ironcore.dev/v1alpha1", Kind: "ServerBootConfiguration", Name: "workload-sbc", UID: "uid-1"},
+				}}},
+				{ObjectMeta: v1.ObjectMeta{Name: "ipxe-maintenance", Namespace: "default", OwnerReferences: []v1.OwnerReference{
+					{APIVersion: "metal.ironcore.dev/v1alpha1", Kind: "ServerBootConfiguration", Name: "maintenance-sbc", UID: "uid-2"},
+				}}},
+			}
+			k8s := newTestClient(server, workloadSBC, maintenanceSBC)
+			result, err := selectBootConfig(ctx, k8s, log, toPointers(items))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Name).To(Equal("ipxe-maintenance"))
+		})
 	})
 
-	Context("selectHTTPBootConfig", func() {
+	Context("selectBootConfig with HTTPBootConfig", func() {
 		It("returns the single item without any lookups", func() {
 			item := bootv1alpha1.HTTPBootConfig{
 				ObjectMeta: v1.ObjectMeta{Name: "cfg-1", Namespace: "default"},
 			}
-			result, err := selectHTTPBootConfig(ctx, newTestClient(), log, []bootv1alpha1.HTTPBootConfig{item})
+			result, err := selectBootConfig(ctx, newTestClient(), log, toPointers([]bootv1alpha1.HTTPBootConfig{item}))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Name).To(Equal("cfg-1"))
+		})
+
+		It("selects the workload config when not in maintenance", func() {
+			server := &metalv1alpha1.Server{
+				ObjectMeta: v1.ObjectMeta{Name: "server-1"},
+				Spec: metalv1alpha1.ServerSpec{
+					BootConfigurationRef: &metalv1alpha1.ObjectReference{Name: "workload-sbc", Namespace: "default"},
+				},
+			}
+			workloadSBC := &metalv1alpha1.ServerBootConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "workload-sbc", Namespace: "default"},
+				Spec:       metalv1alpha1.ServerBootConfigurationSpec{ServerRef: corev1.LocalObjectReference{Name: "server-1"}},
+			}
+			orphanSBC := &metalv1alpha1.ServerBootConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "orphan-sbc", Namespace: "default"},
+				Spec:       metalv1alpha1.ServerBootConfigurationSpec{ServerRef: corev1.LocalObjectReference{Name: "server-1"}},
+			}
+			items := []bootv1alpha1.HTTPBootConfig{
+				{ObjectMeta: v1.ObjectMeta{Name: "http-orphan", Namespace: "default", OwnerReferences: []v1.OwnerReference{
+					{APIVersion: "metal.ironcore.dev/v1alpha1", Kind: "ServerBootConfiguration", Name: "orphan-sbc", UID: "uid-1"},
+				}}},
+				{ObjectMeta: v1.ObjectMeta{Name: "http-workload", Namespace: "default", OwnerReferences: []v1.OwnerReference{
+					{APIVersion: "metal.ironcore.dev/v1alpha1", Kind: "ServerBootConfiguration", Name: "workload-sbc", UID: "uid-2"},
+				}}},
+			}
+			k8s := newTestClient(server, workloadSBC, orphanSBC)
+			result, err := selectBootConfig(ctx, k8s, log, toPointers(items))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Name).To(Equal("http-workload"))
 		})
 	})
 
@@ -264,7 +323,7 @@ var _ = Describe("ConfigSelector", func() {
 
 		It("returns an error when configs have no ServerBootConfiguration owner refs", func() {
 			// Items have owner refs of a different kind — ownerSBCName returns ""
-			// for both, so selectIPXEBootConfig delegates to preferredBootConfigIndex
+			// for both, so selectBootConfig delegates to preferredBootConfigIndex
 			// with all-empty names, which fails at resolveServer.
 			items := []bootv1alpha1.IPXEBootConfig{
 				{
@@ -285,7 +344,7 @@ var _ = Describe("ConfigSelector", func() {
 					},
 				},
 			}
-			_, err := selectIPXEBootConfig(ctx, newTestClient(), log, items)
+			_, err := selectBootConfig(ctx, newTestClient(), log, toPointers(items))
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("resolvable ServerBootConfiguration owner"))
 		})
