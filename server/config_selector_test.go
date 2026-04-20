@@ -30,15 +30,6 @@ func newTestClient(objs ...client.Object) client.Client {
 		Build()
 }
 
-func ownerRef(name string) []metav1.OwnerReference {
-	return []metav1.OwnerReference{{
-		APIVersion: "metal.ironcore.dev/v1alpha1",
-		Kind:       "ServerBootConfiguration",
-		Name:       name,
-		UID:        "test-uid",
-	}}
-}
-
 var _ = Describe("ConfigSelector", func() {
 	var (
 		ctx = context.Background()
