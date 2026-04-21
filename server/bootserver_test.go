@@ -394,5 +394,33 @@ var _ = Describe("ConfigSelector", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("resolvable ServerBootConfiguration owner"))
 		})
+
+		It("skips SBCs whose Server no longer exists and resolves via the next one", func() {
+			// First SBC exists but points to a deleted Server; second resolves.
+			staleSBC := &metalv1alpha1.ServerBootConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "stale-sbc", Namespace: "default"},
+				Spec: metalv1alpha1.ServerBootConfigurationSpec{
+					ServerRef: corev1.LocalObjectReference{Name: "deleted-server"},
+				},
+			}
+			server := &metalv1alpha1.Server{
+				ObjectMeta: v1.ObjectMeta{Name: "server-1"},
+			}
+			validSBC := &metalv1alpha1.ServerBootConfiguration{
+				ObjectMeta: v1.ObjectMeta{Name: "valid-sbc", Namespace: "default"},
+				Spec: metalv1alpha1.ServerBootConfigurationSpec{
+					ServerRef: corev1.LocalObjectReference{Name: "server-1"},
+				},
+			}
+			k8s := newTestClient(staleSBC, server, validSBC)
+
+			owners := []sbcRef{
+				{namespace: "default", name: "stale-sbc"},
+				{namespace: "default", name: "valid-sbc"},
+			}
+			result, err := resolveServer(ctx, k8s, owners)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Name).To(Equal("server-1"))
+		})
 	})
 })

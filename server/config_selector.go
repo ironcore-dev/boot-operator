@@ -61,10 +61,11 @@ func toPointers[T any](items []T) []*T {
 }
 
 // ownerSBCName extracts the ServerBootConfiguration name from an object's
-// owner references.
+// owner references, matching on both API version and kind to avoid false
+// matches from other API groups.
 func ownerSBCName(refs []metav1.OwnerReference) string {
 	for _, ref := range refs {
-		if ref.Kind == "ServerBootConfiguration" {
+		if ref.APIVersion == metalv1alpha1.GroupVersion.String() && ref.Kind == "ServerBootConfiguration" {
 			return ref.Name
 		}
 	}
@@ -167,6 +168,10 @@ func resolveServer(ctx context.Context, k8sClient client.Client, owners []sbcRef
 		}
 		server := &metalv1alpha1.Server{}
 		if err := k8sClient.Get(ctx, types.NamespacedName{Name: sbc.Spec.ServerRef.Name}, server); err != nil {
+			if apierrors.IsNotFound(err) {
+				// The Server referenced by this SBC no longer exists. Try the next owner.
+				continue
+			}
 			return nil, fmt.Errorf("failed to get Server %q referenced by ServerBootConfiguration %q: %w", sbc.Spec.ServerRef.Name, owner.key(), err)
 		}
 		return server, nil
