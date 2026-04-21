@@ -233,10 +233,13 @@ var _ = Describe("ConfigSelector", func() {
 			}
 			k8s := newTestClient(server, workloadSBC, maintenanceSBC)
 
-			sbcNames := []string{"workload-sbc", "maintenance-sbc"}
-			idx, err := preferredBootConfigIndex(ctx, k8s, log, "default", sbcNames)
+			owners := []sbcRef{
+				{namespace: "default", name: "workload-sbc"},
+				{namespace: "default", name: "maintenance-sbc"},
+			}
+			idx, err := preferredBootConfigIndex(ctx, k8s, log, owners)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(sbcNames[idx]).To(Equal("maintenance-sbc"))
+			Expect(owners[idx].name).To(Equal("maintenance-sbc"))
 		})
 
 		It("selects the workload config when server is not in maintenance", func() {
@@ -262,10 +265,13 @@ var _ = Describe("ConfigSelector", func() {
 			}
 			k8s := newTestClient(server, workloadSBC, orphanSBC)
 
-			sbcNames := []string{"workload-sbc", "orphan-sbc"}
-			idx, err := preferredBootConfigIndex(ctx, k8s, log, "default", sbcNames)
+			owners := []sbcRef{
+				{namespace: "default", name: "workload-sbc"},
+				{namespace: "default", name: "orphan-sbc"},
+			}
+			idx, err := preferredBootConfigIndex(ctx, k8s, log, owners)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(sbcNames[idx]).To(Equal("workload-sbc"))
+			Expect(owners[idx].name).To(Equal("workload-sbc"))
 		})
 
 		It("discards orphaned configs and returns the valid one", func() {
@@ -291,11 +297,14 @@ var _ = Describe("ConfigSelector", func() {
 			}
 			k8s := newTestClient(server, workloadSBC, orphanSBC)
 
-			sbcNames := []string{"orphan-sbc", "workload-sbc"}
-			idx, err := preferredBootConfigIndex(ctx, k8s, log, "default", sbcNames)
+			owners := []sbcRef{
+				{namespace: "default", name: "orphan-sbc"},
+				{namespace: "default", name: "workload-sbc"},
+			}
+			idx, err := preferredBootConfigIndex(ctx, k8s, log, owners)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(idx).To(Equal(1))
-			Expect(sbcNames[idx]).To(Equal("workload-sbc"))
+			Expect(owners[idx].name).To(Equal("workload-sbc"))
 		})
 
 		It("returns an error when all configs are orphaned", func() {
@@ -315,8 +324,11 @@ var _ = Describe("ConfigSelector", func() {
 			}
 			k8s := newTestClient(server, orphanSBC)
 
-			sbcNames := []string{"orphan-sbc", "another-orphan"}
-			_, err := preferredBootConfigIndex(ctx, k8s, log, "default", sbcNames)
+			owners := []sbcRef{
+				{namespace: "default", name: "orphan-sbc"},
+				{namespace: "default", name: "another-orphan"},
+			}
+			_, err := preferredBootConfigIndex(ctx, k8s, log, owners)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("orphaned"))
 		})
@@ -363,14 +375,22 @@ var _ = Describe("ConfigSelector", func() {
 			}
 			k8s := newTestClient(server, validSBC)
 
-			result, err := resolveServer(ctx, k8s, "default", []string{"deleted-sbc", "valid-sbc"})
+			owners := []sbcRef{
+				{namespace: "default", name: "deleted-sbc"},
+				{namespace: "default", name: "valid-sbc"},
+			}
+			result, err := resolveServer(ctx, k8s, owners)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Name).To(Equal("server-1"))
 		})
 
 		It("returns an error when no SBC can be resolved", func() {
 			k8s := newTestClient()
-			_, err := resolveServer(ctx, k8s, "default", []string{"gone-sbc", ""})
+			owners := []sbcRef{
+				{namespace: "default", name: "gone-sbc"},
+				{namespace: "default", name: ""},
+			}
+			_, err := resolveServer(ctx, k8s, owners)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("resolvable ServerBootConfiguration owner"))
 		})

@@ -15,6 +15,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// sbcRef identifies an owning ServerBootConfiguration by namespace and name.
+type sbcRef struct {
+	namespace string
+	name      string
+}
+
+func (r sbcRef) key() string {
+	return r.namespace + "/" + r.name
+}
+
 // selectBootConfig picks the correct boot config when multiple configs match
 // the same server. It resolves the owning Server, filters out orphaned configs,
 // and prefers the maintenance config during maintenance. T must implement
@@ -28,11 +38,12 @@ func selectBootConfig[T client.Object](ctx context.Context, k8sClient client.Cli
 		return items[0], nil
 	}
 	log.Info("Multiple boot configs found, resolving preferred config", "count", len(items))
-	sbcNames := make([]string, len(items))
+	owners := make([]sbcRef, len(items))
 	for i := range items {
-		sbcNames[i] = ownerSBCName(items[i].GetOwnerReferences())
+		name := ownerSBCName(items[i].GetOwnerReferences())
+		owners[i] = sbcRef{namespace: items[i].GetNamespace(), name: name}
 	}
-	idx, err := preferredBootConfigIndex(ctx, k8sClient, log, items[0].GetNamespace(), sbcNames)
+	idx, err := preferredBootConfigIndex(ctx, k8sClient, log, owners)
 	if err != nil {
 		return zero, err
 	}
@@ -65,38 +76,41 @@ func ownerSBCName(refs []metav1.OwnerReference) string {
 // ServerBootConfiguration, then filters out configs whose owner SBC is not
 // recognized by the Server's bootConfigurationRef or maintenanceBootConfigurationRef.
 // Among recognized configs, it prefers the maintenance config if the server is
-// in maintenance.
-func preferredBootConfigIndex(ctx context.Context, k8sClient client.Client, log logr.Logger, namespace string, sbcNames []string) (int, error) {
+// in maintenance. Each owner carries its own namespace so cross-namespace items
+// are handled correctly.
+func preferredBootConfigIndex(ctx context.Context, k8sClient client.Client, log logr.Logger, owners []sbcRef) (int, error) {
 	// Find the Server by looking up any SBC that owns one of the configs.
 	// All configs target the same server (queried by UUID/IP), so any valid
 	// SBC will lead to the same Server.
-	server, err := resolveServer(ctx, k8sClient, namespace, sbcNames)
+	server, err := resolveServer(ctx, k8sClient, owners)
 	if err != nil {
 		return 0, fmt.Errorf("failed to resolve Server from boot configs: %w", err)
 	}
 
-	// Build the set of SBC names the Server recognizes.
+	// Build the set of namespace/name keys the Server recognizes.
 	recognized := make(map[string]bool, 2)
 	if server.Spec.BootConfigurationRef != nil {
-		recognized[server.Spec.BootConfigurationRef.Name] = true
+		ref := sbcRef{namespace: server.Spec.BootConfigurationRef.Namespace, name: server.Spec.BootConfigurationRef.Name}
+		recognized[ref.key()] = true
 	}
 	if server.Spec.MaintenanceBootConfigurationRef != nil {
-		recognized[server.Spec.MaintenanceBootConfigurationRef.Name] = true
+		ref := sbcRef{namespace: server.Spec.MaintenanceBootConfigurationRef.Namespace, name: server.Spec.MaintenanceBootConfigurationRef.Name}
+		recognized[ref.key()] = true
 	}
 
 	// Filter items to only those whose owner SBC is recognized by the Server.
 	// Anything else is an orphan from a failed cleanup or a manual creation.
 	var validIndices []int
-	for i, name := range sbcNames {
-		if name != "" && recognized[name] {
+	for i, owner := range owners {
+		if owner.name != "" && recognized[owner.key()] {
 			validIndices = append(validIndices, i)
 		} else {
-			log.Info("Discarding orphaned boot config", "index", i, "ownerSBC", name, "server", server.Name)
+			log.Info("Discarding orphaned boot config", "index", i, "ownerSBC", owner.key(), "server", server.Name)
 		}
 	}
 
 	if len(validIndices) == 0 {
-		return 0, fmt.Errorf("all %d boot configs are orphaned — none match Server %q boot configuration refs", len(sbcNames), server.Name)
+		return 0, fmt.Errorf("all %d boot configs are orphaned — none match Server %q boot configuration refs", len(owners), server.Name)
 	}
 
 	if len(validIndices) == 1 {
@@ -105,10 +119,13 @@ func preferredBootConfigIndex(ctx context.Context, k8sClient client.Client, log 
 
 	// Multiple valid configs: prefer the maintenance one if the server is in maintenance.
 	if server.Spec.MaintenanceBootConfigurationRef != nil {
-		maintenanceSBCName := server.Spec.MaintenanceBootConfigurationRef.Name
+		maintenanceKey := (sbcRef{
+			namespace: server.Spec.MaintenanceBootConfigurationRef.Namespace,
+			name:      server.Spec.MaintenanceBootConfigurationRef.Name,
+		}).key()
 		for _, i := range validIndices {
-			if sbcNames[i] == maintenanceSBCName {
-				log.Info("Selecting maintenance boot config", "maintenanceSBC", maintenanceSBCName, "server", server.Name)
+			if owners[i].key() == maintenanceKey {
+				log.Info("Selecting maintenance boot config", "maintenanceSBC", maintenanceKey, "server", server.Name)
 				return i, nil
 			}
 		}
@@ -116,39 +133,43 @@ func preferredBootConfigIndex(ctx context.Context, k8sClient client.Client, log 
 
 	// Fall back to the workload config.
 	if server.Spec.BootConfigurationRef != nil {
-		workloadSBCName := server.Spec.BootConfigurationRef.Name
+		workloadKey := (sbcRef{
+			namespace: server.Spec.BootConfigurationRef.Namespace,
+			name:      server.Spec.BootConfigurationRef.Name,
+		}).key()
 		for _, i := range validIndices {
-			if sbcNames[i] == workloadSBCName {
+			if owners[i].key() == workloadKey {
 				return i, nil
 			}
 		}
 	}
 
-	// Should not be reachable: validIndices only contains indices whose sbcName
-	// is in the recognized set, and the loops above cover both recognized names.
+	// Should not be reachable: validIndices only contains indices whose owner
+	// is in the recognized set, and the loops above cover both recognized keys.
 	return 0, fmt.Errorf("unexpected state: %d valid boot configs but none matched Server %q refs", len(validIndices), server.Name)
 }
 
 // resolveServer finds the Server that the boot configs target by looking up
-// any owning ServerBootConfiguration and following its serverRef.
-func resolveServer(ctx context.Context, k8sClient client.Client, namespace string, sbcNames []string) (*metalv1alpha1.Server, error) {
-	for _, name := range sbcNames {
-		if name == "" {
+// any owning ServerBootConfiguration and following its serverRef. Each owner
+// carries its own namespace for correct cross-namespace lookups.
+func resolveServer(ctx context.Context, k8sClient client.Client, owners []sbcRef) (*metalv1alpha1.Server, error) {
+	for _, owner := range owners {
+		if owner.name == "" {
 			continue
 		}
 		sbc := &metalv1alpha1.ServerBootConfiguration{}
-		if err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, sbc); err != nil {
+		if err := k8sClient.Get(ctx, types.NamespacedName{Name: owner.name, Namespace: owner.namespace}, sbc); err != nil {
 			if apierrors.IsNotFound(err) {
 				// This SBC has been deleted (orphaned child). Try the next one.
 				continue
 			}
-			return nil, fmt.Errorf("failed to get ServerBootConfiguration %q: %w", name, err)
+			return nil, fmt.Errorf("failed to get ServerBootConfiguration %q: %w", owner.key(), err)
 		}
 		server := &metalv1alpha1.Server{}
 		if err := k8sClient.Get(ctx, types.NamespacedName{Name: sbc.Spec.ServerRef.Name}, server); err != nil {
-			return nil, fmt.Errorf("failed to get Server %q referenced by ServerBootConfiguration %q: %w", sbc.Spec.ServerRef.Name, name, err)
+			return nil, fmt.Errorf("failed to get Server %q referenced by ServerBootConfiguration %q: %w", sbc.Spec.ServerRef.Name, owner.key(), err)
 		}
 		return server, nil
 	}
-	return nil, fmt.Errorf("none of the %d boot configs have a resolvable ServerBootConfiguration owner", len(sbcNames))
+	return nil, fmt.Errorf("none of the %d boot configs have a resolvable ServerBootConfiguration owner", len(owners))
 }
