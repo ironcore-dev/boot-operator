@@ -24,6 +24,7 @@ import (
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -90,9 +91,16 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 	ukiURL, err := r.constructUKIURL(ctx, config.Spec.Image)
 	if err != nil {
 		log.Error(err, "Failed to construct UKI URL")
-		if patchErr := PatchServerBootConfigWithError(ctx, r.Client,
-			types.NamespacedName{Name: config.Name, Namespace: config.Namespace}, err); patchErr != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to patch state to error: %w (original error: %w)", patchErr, err)
+		if patchErr := PatchServerBootConfigCondition(ctx, r.Client,
+			types.NamespacedName{Name: config.Name, Namespace: config.Namespace},
+			metav1.Condition{
+				Type:               HTTPBootReadyConditionType,
+				Status:             metav1.ConditionFalse,
+				Reason:             "UKIURLConstructionFailed",
+				Message:            err.Error(),
+				ObservedGeneration: config.Generation,
+			}); patchErr != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch %s condition: %w (original error: %w)", HTTPBootReadyConditionType, patchErr, err)
 		}
 		return ctrl.Result{}, err
 	}
@@ -135,37 +143,58 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 		return ctrl.Result{}, fmt.Errorf("failed to get HTTPBoot config: %w", err)
 	}
 
-	if err := r.patchConfigStateFromHTTPState(ctx, httpBootConfig, config); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to patch server boot config state to %s: %w", httpBootConfig.Status.State, err)
+	if err := r.patchHTTPBootReadyConditionFromHTTPState(ctx, httpBootConfig, config); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to patch %s condition from HTTPBootConfig state %s: %w", HTTPBootReadyConditionType, httpBootConfig.Status.State, err)
 	}
-	log.V(1).Info("Patched server boot config state")
+	log.V(1).Info("Patched server boot config condition", "condition", HTTPBootReadyConditionType)
 
 	log.V(1).Info("Reconciled ServerBootConfiguration")
 	return ctrl.Result{}, nil
 }
 
-func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ctx context.Context, httpBootConfig *bootv1alpha1.HTTPBootConfig, cfg *metalv1alpha1.ServerBootConfiguration) error {
+func (r *ServerBootConfigurationHTTPReconciler) patchHTTPBootReadyConditionFromHTTPState(ctx context.Context, httpBootConfig *bootv1alpha1.HTTPBootConfig, cfg *metalv1alpha1.ServerBootConfiguration) error {
 	key := types.NamespacedName{Name: cfg.Name, Namespace: cfg.Namespace}
-	var cur metalv1alpha1.ServerBootConfiguration
-	if err := r.Get(ctx, key, &cur); err != nil {
-		return err
-	}
-	base := cur.DeepCopy()
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var cur metalv1alpha1.ServerBootConfiguration
+		if err := r.Get(ctx, key, &cur); err != nil {
+			return err
+		}
+		base := cur.DeepCopy()
 
-	switch httpBootConfig.Status.State {
-	case bootv1alpha1.HTTPBootConfigStateReady:
-		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
-		// Remove ImageValidation condition when transitioning to Ready
-		apimeta.RemoveStatusCondition(&cur.Status.Conditions, "ImageValidation")
-	case bootv1alpha1.HTTPBootConfigStateError:
-		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateError
-	}
+		if cur.Generation != cfg.Generation {
+			// The SBC has been updated since this reconcile started; a newer reconcile
+			// will handle the fresh generation. Avoid stamping stale data on it.
+			return nil
+		}
 
-	for _, c := range httpBootConfig.Status.Conditions {
-		apimeta.SetStatusCondition(&cur.Status.Conditions, c)
-	}
+		cond := metav1.Condition{
+			Type: HTTPBootReadyConditionType,
+			// Use cfg.Generation, not cur.Generation: the condition content was
+			// derived from cfg's HTTPBootConfig, so it reflects that generation.
+			ObservedGeneration: cfg.Generation,
+		}
+		switch {
+		case httpBootConfig.Status.ObservedGeneration < httpBootConfig.Generation:
+			// Child controller hasn't reconciled the new spec yet; don't write anything.
+			// The Owns() watch will re-trigger this reconcile once the child updates its status.
+			return nil
+		case httpBootConfig.Status.State == bootv1alpha1.HTTPBootConfigStateReady:
+			cond.Status = metav1.ConditionTrue
+			cond.Reason = "BootConfigReady"
+			cond.Message = "HTTP boot configuration is ready."
+		case httpBootConfig.Status.State == bootv1alpha1.HTTPBootConfigStateError:
+			cond.Status = metav1.ConditionFalse
+			cond.Reason = "BootConfigError"
+			cond.Message = "HTTPBootConfig reported an error."
+		default:
+			cond.Status = metav1.ConditionUnknown
+			cond.Reason = BootConfigPendingReason
+			cond.Message = "Waiting for HTTPBootConfig to become Ready."
+		}
 
-	return r.Status().Patch(ctx, &cur, client.MergeFrom(base))
+		apimeta.SetStatusCondition(&cur.Status.Conditions, cond)
+		return r.Status().Patch(ctx, &cur, client.MergeFrom(base))
+	})
 }
 
 // getSystemUUIDFromServer fetches the UUID from the referenced Server object.

@@ -27,6 +27,9 @@ type HTTPBootConfigSpec struct {
 type HTTPBootConfigStatus struct {
 	State HTTPBootConfigState `json:"state,omitempty"`
 
+	// ObservedGeneration is the generation of the HTTPBootConfig that was last reconciled by the controller.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// Conditions represent the latest available observations of the IPXEBootConfig's state
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
