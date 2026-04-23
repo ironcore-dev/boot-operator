@@ -119,7 +119,7 @@ func preferredBootConfigIndex(ctx context.Context, k8sClient client.Client, log 
 	}
 
 	// Multiple valid configs: prefer the maintenance one if the server is in maintenance.
-	if server.Spec.MaintenanceBootConfigurationRef != nil {
+	if server.Status.State == metalv1alpha1.ServerStateMaintenance && server.Spec.MaintenanceBootConfigurationRef != nil {
 		maintenanceKey := (sbcRef{
 			namespace: server.Spec.MaintenanceBootConfigurationRef.Namespace,
 			name:      server.Spec.MaintenanceBootConfigurationRef.Name,
@@ -153,6 +153,12 @@ func preferredBootConfigIndex(ctx context.Context, k8sClient client.Client, log 
 // resolveServer finds the Server that the boot configs target by looking up
 // any owning ServerBootConfiguration and following its serverRef. Each owner
 // carries its own namespace for correct cross-namespace lookups.
+//
+// Note: This returns the first resolvable Server without validating that all
+// owners point to the same Server. The query contract (boot configs matched by
+// systemUUID or systemIPs) makes cross-server matches extremely unlikely in
+// practice. Adding validation would catch only manual misconfigurations while
+// adding complexity and latency to every boot request.
 func resolveServer(ctx context.Context, k8sClient client.Client, owners []sbcRef) (*metalv1alpha1.Server, error) {
 	for _, owner := range owners {
 		if owner.name == "" {
