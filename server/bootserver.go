@@ -136,7 +136,12 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 		return
 	}
 
-	config := ipxeBootConfigList.Items[0]
+	config, err := selectBootConfig(ctx, k8sClient, log, toPointers(ipxeBootConfigList.Items))
+	if err != nil {
+		log.Error(err, "Failed to select IPXEBootConfig")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 	if config.Spec.IPXEScriptSecretRef != nil {
 		secret := &corev1.Secret{}
 		err := k8sClient.Get(ctx, types.NamespacedName{Name: config.Spec.IPXEScriptSecretRef.Name, Namespace: config.Namespace}, secret)
@@ -167,7 +172,7 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 		IPXEServerURL: ipxeServiceURL,
 	})
 
-	err = SetStatusCondition(ctx, k8sClient, log, &config, "IPXEScriptFetched")
+	err = SetStatusCondition(ctx, k8sClient, log, config, "IPXEScriptFetched")
 	if err != nil {
 		log.Error(err, "Failed to set IPXEScriptFetched status condition")
 	}
@@ -208,7 +213,12 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		return
 	}
 
-	ipxeBootConfig := ipxeBootConfigList.Items[0]
+	ipxeBootConfig, err := selectBootConfig(ctx, k8sClient, log, toPointers(ipxeBootConfigList.Items))
+	if err != nil {
+		log.Error(err, "Failed to select IPXEBootConfig")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 
 	ignitionSecret := corev1.Secret{
 		ObjectMeta: v1.ObjectMeta{
@@ -244,7 +254,7 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		return
 	}
 
-	err = SetStatusCondition(ctx, k8sClient, log, &ipxeBootConfig, "IgnitionDataFetched")
+	err = SetStatusCondition(ctx, k8sClient, log, ipxeBootConfig, "IgnitionDataFetched")
 	if err != nil {
 		log.Error(err, "Failed to set IgnitionDataFetched status condition")
 	}
@@ -315,7 +325,12 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		return
 	}
 
-	httpBootConfig := HTTPBootConfigList.Items[0]
+	httpBootConfig, err := selectBootConfig(ctx, k8sClient, log, toPointers(HTTPBootConfigList.Items))
+	if err != nil {
+		log.Error(err, "Failed to select HTTPBootConfig")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
 
 	ignitionSecret := corev1.Secret{
 		ObjectMeta: v1.ObjectMeta{
@@ -351,7 +366,7 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 		return
 	}
 
-	err = SetStatusCondition(ctx, k8sClient, log, &httpBootConfig, "IgnitionDataFetched")
+	err = SetStatusCondition(ctx, k8sClient, log, httpBootConfig, "IgnitionDataFetched")
 	if err != nil {
 		log.Error(err, "Failed to set IgnitionDataFetched status condition")
 	}
@@ -465,9 +480,12 @@ func handleHTTPBoot(
 			"UKIURL":    ukiURL,
 		}
 	} else {
-		// TODO: Pick the first HttpBootConfig if multiple CRs are found.
-		// Implement better validation in the future.
-		httpBootConfig := httpBootConfigs.Items[0]
+		httpBootConfig, err := selectBootConfig(ctx, k8sClient, log, toPointers(httpBootConfigs.Items))
+		if err != nil {
+			log.Error(err, "Failed to select HTTPBootConfig")
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
 
 		httpBootResponseData = map[string]string{
 			"ClientIPs":  strings.Join(clientIPs, ","),

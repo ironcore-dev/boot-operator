@@ -11,6 +11,7 @@ import (
 	"github.com/go-logr/logr"
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	"github.com/ironcore-dev/boot-operator/internal/registry"
+	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -34,10 +35,23 @@ func TestBootServer(t *testing.T) {
 	RunSpecs(t, "Boot Server Suite")
 }
 
+func newTestClient(objs ...client.Object) client.Client {
+	scheme := runtime.NewScheme()
+	Expect(corev1.AddToScheme(scheme)).To(Succeed())
+	Expect(bootv1alpha1.AddToScheme(scheme)).To(Succeed())
+	Expect(metalv1alpha1.AddToScheme(scheme)).To(Succeed())
+	return fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(objs...).
+		WithStatusSubresource(&metalv1alpha1.Server{}).
+		Build()
+}
+
 var _ = BeforeSuite(func() {
 	scheme := runtime.NewScheme()
 	Expect(corev1.AddToScheme(scheme)).To(Succeed())
 	Expect(bootv1alpha1.AddToScheme(scheme)).To(Succeed())
+	Expect(metalv1alpha1.AddToScheme(scheme)).To(Succeed())
 
 	k8sClient = fake.NewClientBuilder().
 		WithScheme(scheme).
