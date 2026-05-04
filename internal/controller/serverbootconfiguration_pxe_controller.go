@@ -31,6 +31,7 @@ import (
 	"github.com/ironcore-dev/boot-operator/internal/registry"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/go-logr/logr"
@@ -107,9 +108,16 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 
 	kernelURL, initrdURL, squashFSURL, err := r.getImageDetailsFromConfig(ctx, bootConfig)
 	if err != nil {
-		if patchErr := PatchServerBootConfigWithError(ctx, r.Client,
-			types.NamespacedName{Name: bootConfig.Name, Namespace: bootConfig.Namespace}, err); patchErr != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to patch server boot config state: %w (original error: %w)", patchErr, err)
+		if patchErr := PatchServerBootConfigCondition(ctx, r.Client,
+			types.NamespacedName{Name: bootConfig.Name, Namespace: bootConfig.Namespace},
+			metav1.Condition{
+				Type:               IPXEBootReadyConditionType,
+				Status:             metav1.ConditionFalse,
+				Reason:             "ImageDetailsFailed",
+				Message:            err.Error(),
+				ObservedGeneration: bootConfig.Generation,
+			}); patchErr != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch %s condition: %w (original error: %w)", IPXEBootReadyConditionType, patchErr, err)
 		}
 		return ctrl.Result{}, err
 	}
@@ -154,32 +162,58 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 		return ctrl.Result{}, fmt.Errorf("failed to get IPXE config: %w", err)
 	}
 
-	if err := r.patchConfigStateFromIPXEState(ctx, config, bootConfig); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to patch server boot config state to %s: %w", config.Status.State, err)
+	if err := r.patchIPXEBootReadyConditionFromIPXEState(ctx, config, bootConfig); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to patch %s condition from IPXEBootConfig state %s: %w", IPXEBootReadyConditionType, config.Status.State, err)
 	}
-	log.V(1).Info("Patched server boot config state")
+	log.V(1).Info("Patched server boot config condition", "condition", IPXEBootReadyConditionType)
 
 	log.V(1).Info("Reconciled ServerBootConfiguration")
 	return ctrl.Result{}, nil
 }
 
-func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx context.Context, config *v1alpha1.IPXEBootConfig, bootConfig *metalv1alpha1.ServerBootConfiguration) error {
-	bootConfigBase := bootConfig.DeepCopy()
+func (r *ServerBootConfigurationPXEReconciler) patchIPXEBootReadyConditionFromIPXEState(ctx context.Context, config *v1alpha1.IPXEBootConfig, bootConfig *metalv1alpha1.ServerBootConfiguration) error {
+	key := types.NamespacedName{Name: bootConfig.Name, Namespace: bootConfig.Namespace}
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		var cur metalv1alpha1.ServerBootConfiguration
+		if err := r.Get(ctx, key, &cur); err != nil {
+			return err
+		}
+		base := cur.DeepCopy()
 
-	switch config.Status.State {
-	case v1alpha1.IPXEBootConfigStateReady:
-		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
-		// Remove ImageValidation condition when transitioning to Ready
-		apimeta.RemoveStatusCondition(&bootConfig.Status.Conditions, "ImageValidation")
-	case v1alpha1.IPXEBootConfigStateError:
-		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStateError
-	}
+		if cur.Generation != bootConfig.Generation {
+			// The SBC has been updated since this reconcile started; a newer reconcile
+			// will handle the fresh generation. Avoid stamping stale data on it.
+			return nil
+		}
 
-	for _, c := range config.Status.Conditions {
-		apimeta.SetStatusCondition(&bootConfig.Status.Conditions, c)
-	}
+		cond := metav1.Condition{
+			Type: IPXEBootReadyConditionType,
+			// Use bootConfig.Generation, not cur.Generation: the condition content was
+			// derived from bootConfig's IPXEBootConfig, so it reflects that generation.
+			ObservedGeneration: bootConfig.Generation,
+		}
+		switch {
+		case config.Status.ObservedGeneration < config.Generation:
+			// Child controller hasn't reconciled the new spec yet; don't write anything.
+			// The Owns() watch will re-trigger this reconcile once the child updates its status.
+			return nil
+		case config.Status.State == v1alpha1.IPXEBootConfigStateReady:
+			cond.Status = metav1.ConditionTrue
+			cond.Reason = "BootConfigReady"
+			cond.Message = "IPXE boot configuration is ready."
+		case config.Status.State == v1alpha1.IPXEBootConfigStateError:
+			cond.Status = metav1.ConditionFalse
+			cond.Reason = "BootConfigError"
+			cond.Message = "IPXEBootConfig reported an error."
+		default:
+			cond.Status = metav1.ConditionUnknown
+			cond.Reason = BootConfigPendingReason
+			cond.Message = "Waiting for IPXEBootConfig to become Ready."
+		}
 
-	return r.Status().Patch(ctx, bootConfig, client.MergeFrom(bootConfigBase))
+		apimeta.SetStatusCondition(&cur.Status.Conditions, cond)
+		return r.Status().Patch(ctx, &cur, client.MergeFrom(base))
+	})
 }
 
 func (r *ServerBootConfigurationPXEReconciler) getSystemUUIDFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {
