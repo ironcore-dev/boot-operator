@@ -524,7 +524,7 @@ func parseImageURL(queries url.Values) (imageDetails ImageDetails, err error) {
 	version := queries.Get(versionKey)
 
 	if ociImageName == "" || layerDigest == "" || version == "" {
-		return ImageDetails{}, fmt.Errorf("missing required query parameters 'image' or 'layer' or 'version'")
+		return ImageDetails{}, fmt.Errorf("missing required query parameters 'imageName', 'layerDigest', or 'version'")
 	}
 
 	ociImageName = strings.TrimSuffix(ociImageName, ".efi")
