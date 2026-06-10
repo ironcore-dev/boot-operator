@@ -105,7 +105,7 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 	}
 	log.V(1).Info("Got system IP from BootConfig", "systemIPs", systemIPs)
 
-	kernelURL, initrdURL, squashFSURL, err := r.getImageDetailsFromConfig(ctx, bootConfig)
+	kernelURL, initrdURL, squashFSURL, err := r.getImageDetailsFromConfig(ctx, log, bootConfig)
 	if err != nil {
 		if patchErr := PatchServerBootConfigWithError(ctx, r.Client,
 			types.NamespacedName{Name: bootConfig.Name, Namespace: bootConfig.Namespace}, err); patchErr != nil {
@@ -200,20 +200,22 @@ func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx con
 	return ExtractServerNetworkIDs(server, false), nil
 }
 
-func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
+func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx context.Context, log logr.Logger, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
 	imageName, imageVersion, err := ParseImageReference(config.Spec.Image)
 	if err != nil {
 		return "", "", "", err
 	}
+	log.V(1).Info("Parsed image reference", "specImage", config.Spec.Image, "imageName", imageName, "imageVersion", imageVersion)
 
 	kernelDigest, initrdDigest, squashFSDigest, err := r.getLayerDigestsFromNestedManifest(ctx, imageName, imageVersion)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to fetch layer digests: %w", err)
 	}
 
-	kernelURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageName, imageVersion, kernelDigest)
-	initrdURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageName, imageVersion, initrdDigest)
-	squashFSURL := fmt.Sprintf("%s/image?imageName=%s&version=%s&layerDigest=%s", r.IPXEServiceURL, imageName, imageVersion, squashFSDigest)
+	kernelURL := buildImageURL(r.IPXEServiceURL, imageName, imageVersion, kernelDigest)
+	initrdURL := buildImageURL(r.IPXEServiceURL, imageName, imageVersion, initrdDigest)
+	squashFSURL := buildImageURL(r.IPXEServiceURL, imageName, imageVersion, squashFSDigest)
+	log.V(1).Info("Built image URLs", "kernelURL", kernelURL, "initrdURL", initrdURL, "squashfsURL", squashFSURL)
 
 	return kernelURL, initrdURL, squashFSURL, nil
 }

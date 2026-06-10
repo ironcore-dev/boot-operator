@@ -5,6 +5,7 @@ package controller
 
 import (
 	"errors"
+	"net/url"
 	"testing"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
@@ -69,6 +70,46 @@ func TestBuildImageReference(t *testing.T) {
 				t.Errorf("BuildImageReference(%q, %q) = %q, want %q", tt.imageName, tt.imageVersion, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestImageURLFromSpecImage(t *testing.T) {
+	// Regression test for the URL construction step.
+	// The old strings.Split(image, ":") code split
+	//   "registry.../gardenlinux@sha256:a5f8b641..."
+	// into ("registry.../gardenlinux@sha256", "a5f8b641..."),
+	// producing imageName=...@sha256&version=a5f8b641... in the stored URL.
+	// ParseImageReference correctly splits into ("registry.../gardenlinux", "sha256:a5f8b641...").
+	// This test verifies that buildImageURL stores those values without mangling.
+	const (
+		serviceURL   = "https://boot-operator.example.svc.cluster.local:8080"
+		imageName    = "registry.global.example.com/ccloud-ghcr-io-mirror/gardenlinux/gardenlinux"
+		imageVersion = "sha256:a5f8b641e52e34b230f6335663fe85c94db89d7d34c184478ec0faaf6747703d"
+		kernelDigest = "sha256:f1b8b8dfd3b9f810662becdbcf508357fb71ad5c0c709a97350522d71e0592ad"
+		initrdDigest = "sha256:44d8ed8c6f3ca903cc52c3b281011869c2d5ebccfc662409dc559d6e2890234f"
+		squashDigest = "sha256:4b505f664719aa635a91cd1543026374ee6a09849edb29aca6096a256f51185d"
+	)
+
+	for _, tc := range []struct{ label, digest string }{
+		{"kernel", kernelDigest},
+		{"initrd", initrdDigest},
+		{"squashfs", squashDigest},
+	} {
+		rawURL := buildImageURL(serviceURL, imageName, imageVersion, tc.digest)
+		parsed, err := url.Parse(rawURL)
+		if err != nil {
+			t.Fatalf("%s: url.Parse(%q) error: %v", tc.label, rawURL, err)
+		}
+		q := parsed.Query()
+		if got := q.Get("imageName"); got != imageName {
+			t.Errorf("%s: imageName = %q, want %q (must not contain @sha256 suffix)", tc.label, got, imageName)
+		}
+		if got := q.Get("version"); got != imageVersion {
+			t.Errorf("%s: version = %q, want %q (sha256: prefix must be preserved)", tc.label, got, imageVersion)
+		}
+		if got := q.Get("layerDigest"); got != tc.digest {
+			t.Errorf("%s: layerDigest = %q, want %q", tc.label, got, tc.digest)
+		}
 	}
 }
 

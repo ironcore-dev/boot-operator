@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/distribution/reference"
@@ -62,6 +63,17 @@ func BuildImageReference(imageName, imageVersion string) string {
 		return fmt.Sprintf("%s@%s", imageName, imageVersion)
 	}
 	return fmt.Sprintf("%s:%s", imageName, imageVersion)
+}
+
+// buildImageURL constructs a percent-encoded image proxy URL.
+// url.Values.Encode ensures the colon in digest versions (e.g. sha256:<hash>) is encoded
+// as %3A so it is not misinterpreted as a delimiter by HTTP clients or kube-apiserver.
+func buildImageURL(serviceURL, imageName, imageVersion, layerDigest string) string {
+	params := url.Values{}
+	params.Set("imageName", imageName)
+	params.Set("version", imageVersion)
+	params.Set("layerDigest", layerDigest)
+	return serviceURL + "/image?" + params.Encode()
 }
 
 // ExtractServerNetworkIDs extracts IP addresses (and optionally MAC addresses) from a Server's network interfaces.
