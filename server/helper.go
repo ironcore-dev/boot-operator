@@ -15,6 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const serverBootConfigurationKind = "ServerBootConfiguration"
+
 // sbcRef identifies an owning ServerBootConfiguration by namespace and name.
 type sbcRef struct {
 	namespace string
@@ -65,7 +67,7 @@ func toPointers[T any](items []T) []*T {
 // matches from other API groups.
 func ownerSBCName(refs []metav1.OwnerReference) string {
 	for _, ref := range refs {
-		if ref.APIVersion == metalv1alpha1.GroupVersion.String() && ref.Kind == "ServerBootConfiguration" {
+		if ref.APIVersion == metalv1alpha1.GroupVersion.String() && ref.Kind == serverBootConfigurationKind {
 			return ref.Name
 		}
 	}

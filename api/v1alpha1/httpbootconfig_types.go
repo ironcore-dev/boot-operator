@@ -6,6 +6,7 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // HTTPBootConfigSpec defines the desired state of HTTPBootConfig
@@ -69,5 +70,8 @@ type HTTPBootConfigList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&HTTPBootConfig{}, &HTTPBootConfigList{})
+	SchemeBuilder.Register(func(s *runtime.Scheme) error {
+		s.AddKnownTypes(GroupVersion, &HTTPBootConfig{}, &HTTPBootConfigList{})
+		return nil
+	})
 }
