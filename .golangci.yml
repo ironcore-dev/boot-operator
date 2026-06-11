@@ -35,6 +35,9 @@ linters:
           - lll
         path: server/*
       - linters:
+          - goconst
+        path: .*_test\.go
+      - linters:
           - lll
         path: cmd/*
     paths:
