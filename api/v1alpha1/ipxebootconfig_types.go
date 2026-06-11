@@ -86,7 +86,3 @@ type IPXEBootConfigList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []IPXEBootConfig `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&IPXEBootConfig{}, &IPXEBootConfigList{})
-}

@@ -67,7 +67,3 @@ type HTTPBootConfigList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []HTTPBootConfig `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&HTTPBootConfig{}, &HTTPBootConfigList{})
-}
