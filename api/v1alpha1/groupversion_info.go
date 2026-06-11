@@ -17,19 +17,11 @@ var (
 	GroupVersion = schema.GroupVersion{Group: "boot.ironcore.dev", Version: "v1alpha1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
-	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
+	SchemeBuilder = runtime.NewSchemeBuilder(func(scheme *runtime.Scheme) error {
+		metav1.AddToGroupVersion(scheme, GroupVersion)
+		return nil
+	})
 
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
 )
-
-func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(GroupVersion,
-		&HTTPBootConfig{},
-		&HTTPBootConfigList{},
-		&IPXEBootConfig{},
-		&IPXEBootConfigList{},
-	)
-	metav1.AddToGroupVersion(scheme, GroupVersion)
-	return nil
-}
