@@ -9,7 +9,7 @@ require (
 	github.com/go-logr/logr v1.4.3
 	github.com/ironcore-dev/controller-utils v0.11.0
 	github.com/ironcore-dev/metal v0.0.0-20240624131301-18385f342755
-	github.com/ironcore-dev/metal-operator v0.5.0
+	github.com/ironcore-dev/metal-operator v0.5.1
 	github.com/onsi/ginkgo/v2 v2.29.0
 	github.com/onsi/gomega v1.41.0
 	github.com/opencontainers/go-digest v1.0.0
