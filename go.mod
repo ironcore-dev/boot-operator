@@ -7,7 +7,7 @@ require (
 	github.com/coreos/butane v0.28.0
 	github.com/distribution/reference v0.6.0
 	github.com/go-logr/logr v1.4.3
-	github.com/ironcore-dev/controller-utils v0.11.0
+	github.com/ironcore-dev/controller-utils v0.12.0
 	github.com/ironcore-dev/metal v0.0.0-20240624131301-18385f342755
 	github.com/ironcore-dev/metal-operator v0.5.1
 	github.com/onsi/ginkgo/v2 v2.29.0
