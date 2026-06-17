@@ -171,6 +171,11 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: ObservedGeneration is the generation of the IPXEBootConfig
+                  that was last reconciled by the controller.
+                format: int64
+                type: integer
               state:
                 description: 'Important: Run "make" to regenerate code after modifying
                   this file'
