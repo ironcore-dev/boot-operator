@@ -3,7 +3,7 @@ module github.com/ironcore-dev/boot-operator
 go 1.26.0
 
 require (
-	github.com/containerd/containerd v1.7.32
+	github.com/containerd/containerd v1.7.33
 	github.com/coreos/butane v0.28.0
 	github.com/distribution/reference v0.6.0
 	github.com/go-logr/logr v1.4.3
