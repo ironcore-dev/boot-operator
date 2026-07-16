@@ -12,13 +12,7 @@ on:
       - main
     tags:
       - v*
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
   pull_request:
-    paths-ignore:
-      - 'docs/**'
-      - '**/*.md'
     types: [labeled, unlabeled, opened, synchronize, reopened]
 
 permissions:
