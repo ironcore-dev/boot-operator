@@ -24,9 +24,13 @@ type IPXEBootConfigSpec struct {
 	Image string `json:"image,omitempty"`
 
 	// KernelURL is the URL where the kernel of the OS is hosted, eg. the URL to the Kernel layer of the OS OCI image.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
 	KernelURL string `json:"kernelURL"`
 
 	// InitrdURL is the URL where the Initrd (initial RAM disk) of the OS is hosted, eg. the URL to the Initrd layer of the OS OCI image.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:MinLength=1
 	InitrdURL string `json:"initrdURL"`
 
 	// SquashfsURL is the URL where the Squashfs of the OS is hosted, eg.  the URL to the Squashfs layer of the OS OCI image.

@@ -38,7 +38,10 @@ var _ = Describe("IPXEBootConfig Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: bootv1alpha1.IPXEBootConfigSpec{
+						KernelURL: "http://example.com/kernel",
+						InitrdURL: "http://example.com/initrd",
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
