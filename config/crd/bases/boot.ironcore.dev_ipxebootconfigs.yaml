@@ -104,6 +104,7 @@ spec:
                 description: SystemUUID is the unique identifier (UUID) of the server.
                 type: string
             required:
+            - initrdURL
             - kernelURL
             type: object
           status:
