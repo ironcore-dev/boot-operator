@@ -124,8 +124,8 @@ _Appears in:_
 | `systemUUID` _string_ | SystemUUID is the unique identifier (UUID) of the server. |  |  |
 | `systemIPs` _string array_ | SystemIPs is a list of IP addresses assigned to the server. |  |  |
 | `image` _string_ | Image is deprecated and will be removed. |  |  |
-| `kernelURL` _string_ | KernelURL is the URL where the kernel of the OS is hosted, eg. the URL to the Kernel layer of the OS OCI image. |  |  |
-| `initrdURL` _string_ | InitrdURL is the URL where the Initrd (initial RAM disk) of the OS is hosted, eg. the URL to the Initrd layer of the OS OCI image. |  |  |
+| `kernelURL` _string_ | KernelURL is the URL where the kernel of the OS is hosted, eg. the URL to the Kernel layer of the OS OCI image. |  | MinLength: 1 <br />Required: \{\} <br /> |
+| `initrdURL` _string_ | InitrdURL is the URL where the Initrd (initial RAM disk) of the OS is hosted, eg. the URL to the Initrd layer of the OS OCI image. |  | MinLength: 1 <br />Required: \{\} <br /> |
 | `squashfsURL` _string_ | SquashfsURL is the URL where the Squashfs of the OS is hosted, eg.  the URL to the Squashfs layer of the OS OCI image. |  |  |
 | `ipxeServerURL` _string_ | IPXEServerURL is deprecated and will be removed. |  |  |
 | `ignitionSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#localobjectreference-v1-core)_ | IgnitionSecretRef is a reference to the secret containing the Ignition configuration. |  |  |
