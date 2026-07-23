@@ -29,6 +29,8 @@ const (
 	MediaTypeKernelOld = "application/io.gardenlinux.kernel"
 	// MediaTypeInitrdOld represents the legacy initrd media type
 	MediaTypeInitrdOld = "application/io.gardenlinux.initrd"
+	// MediaTypeOCIConfig represents the OCI image config media type
+	MediaTypeOCIConfig = "application/vnd.oci.image.config.v1+json"
 )
 
 // MockRegistry provides an in-memory OCI registry for testing
@@ -100,7 +102,7 @@ func (r *MockRegistry) pushPXEManifest(name, tag string, kernelMedia, initrdMedi
 	manifest := ocispec.Manifest{
 		MediaType: ocispec.MediaTypeImageManifest,
 		Config: ocispec.Descriptor{
-			MediaType: "application/vnd.oci.image.config.v1+json",
+			MediaType: MediaTypeOCIConfig,
 			Digest:    configDigest,
 			Size:      2,
 		},
@@ -146,7 +148,7 @@ func (r *MockRegistry) pushPXEManifestNoSquashFS(name, tag string, kernelMedia, 
 	manifest := ocispec.Manifest{
 		MediaType: ocispec.MediaTypeImageManifest,
 		Config: ocispec.Descriptor{
-			MediaType: "application/vnd.oci.image.config.v1+json",
+			MediaType: MediaTypeOCIConfig,
 			Digest:    configDigest,
 			Size:      2,
 		},
@@ -212,7 +214,7 @@ func (r *MockRegistry) PushHTTPImage(name, tag string) error {
 	manifest := ocispec.Manifest{
 		MediaType: ocispec.MediaTypeImageManifest,
 		Config: ocispec.Descriptor{
-			MediaType: "application/vnd.oci.image.config.v1+json",
+			MediaType: MediaTypeOCIConfig,
 			Digest:    configDigest,
 			Size:      2,
 		},
