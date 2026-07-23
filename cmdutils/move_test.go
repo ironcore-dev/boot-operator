@@ -62,6 +62,8 @@ var _ = Describe("bootctl move", func() {
 
 		sourceIPXESecret := create(ctx, clients.Source, namedObj(&corev1.Secret{}, "ipxe-secret"))
 		sourceIPXEBootConfig := namedObj(&bootv1alphav1.IPXEBootConfig{}, "test-ipxe-boot-config")
+		sourceIPXEBootConfig.Spec.KernelURL = "http://example.com/kernel"
+		sourceIPXEBootConfig.Spec.InitrdURL = "http://example.com/initrd"
 		sourceIPXEBootConfig.Spec.IgnitionSecretRef = &corev1.LocalObjectReference{Name: sourceIPXESecret.Name}
 		sourceIPXEBootConfig = create(ctx, clients.Source, sourceIPXEBootConfig)
 
