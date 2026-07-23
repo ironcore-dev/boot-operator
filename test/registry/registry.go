@@ -137,11 +137,59 @@ func (r *MockRegistry) pushPXEManifest(name, tag string, kernelMedia, initrdMedi
 	r.blobs[squashfsDigest] = []byte("squashfs-data")
 }
 
+// pushPXEManifestNoSquashFS stores a PXE manifest with only kernel and initrd layers.
+func (r *MockRegistry) pushPXEManifestNoSquashFS(name, tag string, kernelMedia, initrdMedia string) {
+	kernelDigest := digest.FromString(fmt.Sprintf("kernel-%s-%s", name, tag))
+	initrdDigest := digest.FromString(fmt.Sprintf("initrd-%s-%s", name, tag))
+	configDigest := digest.FromString(fmt.Sprintf("config-%s-%s", name, tag))
+
+	manifest := ocispec.Manifest{
+		MediaType: ocispec.MediaTypeImageManifest,
+		Config: ocispec.Descriptor{
+			MediaType: "application/vnd.oci.image.config.v1+json",
+			Digest:    configDigest,
+			Size:      2,
+		},
+		Layers: []ocispec.Descriptor{
+			{
+				MediaType: kernelMedia,
+				Digest:    kernelDigest,
+				Size:      1024,
+			},
+			{
+				MediaType: initrdMedia,
+				Digest:    initrdDigest,
+				Size:      2048,
+			},
+		},
+	}
+
+	ref := fmt.Sprintf("%s:%s", name, tag)
+	r.manifests[ref] = manifest
+
+	manifestBytes, _ := json.Marshal(manifest)
+	manifestDigest := digest.FromBytes(manifestBytes)
+	r.manifestsByDigest[manifestDigest] = manifest
+
+	r.blobs[manifest.Config.Digest] = []byte("{}")
+	r.blobs[kernelDigest] = []byte("kernel-data")
+	r.blobs[initrdDigest] = []byte("initrd-data")
+}
+
 // PushPXEImage adds a PXE boot image with kernel, initrd, and squashfs layers
 func (r *MockRegistry) PushPXEImage(name, tag, architecture string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.pushPXEManifest(name, tag, MediaTypeKernel, MediaTypeInitrd)
+	return nil
+}
+
+// PushPXEImageNoSquashFS adds a PXE boot image with only kernel and initrd layers (no squashfs).
+// Used for initramfs-only images such as the sanitizer.
+func (r *MockRegistry) PushPXEImageNoSquashFS(name, tag, architecture string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.pushPXEManifestNoSquashFS(name, tag, MediaTypeKernel, MediaTypeInitrd)
 	return nil
 }
 

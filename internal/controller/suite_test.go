@@ -73,6 +73,7 @@ var _ = BeforeSuite(func() {
 	// Push test images to mock registry (using simple paths without localhost prefix)
 	Expect(mockRegistry.PushPXEImage("ironcore-dev/os-images/gardenlinux", "1877.0", runtime.GOARCH)).To(Succeed())
 	Expect(mockRegistry.PushPXEImageOldFormat("gardenlinux/gardenlinux", "1772.0", runtime.GOARCH)).To(Succeed())
+	Expect(mockRegistry.PushPXEImageNoSquashFS("ironcore-dev/os-images/sanitizer", "1.0.0", runtime.GOARCH)).To(Succeed())
 	Expect(mockRegistry.PushHTTPImage("ironcore-dev/os-images/test-image", "100.1")).To(Succeed())
 
 	// Set allowed registries to use mock registry
