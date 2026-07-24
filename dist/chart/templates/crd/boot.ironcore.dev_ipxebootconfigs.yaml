@@ -74,6 +74,7 @@ spec:
                 description: InitrdURL is the URL where the Initrd (initial RAM disk)
                   of the OS is hosted, eg. the URL to the Initrd layer of the OS OCI
                   image.
+                minLength: 1
                 type: string
               ipxeScriptSecretRef:
                 description: IPXEScriptSecretRef is a reference to the secret containing
@@ -96,6 +97,7 @@ spec:
               kernelURL:
                 description: KernelURL is the URL where the kernel of the OS is hosted,
                   eg. the URL to the Kernel layer of the OS OCI image.
+                minLength: 1
                 type: string
               squashfsURL:
                 description: SquashfsURL is the URL where the Squashfs of the OS is
@@ -109,6 +111,9 @@ spec:
               systemUUID:
                 description: SystemUUID is the unique identifier (UUID) of the server.
                 type: string
+            required:
+            - initrdURL
+            - kernelURL
             type: object
           status:
             description: IPXEBootConfigStatus defines the observed state of IPXEBootConfig

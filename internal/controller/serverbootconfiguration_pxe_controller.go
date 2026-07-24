@@ -212,9 +212,16 @@ func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx con
 		return "", "", "", fmt.Errorf("failed to fetch layer digests: %w", err)
 	}
 
-	kernelURL := buildImageURL(r.IPXEServiceURL, imageName, imageVersion, kernelDigest)
-	initrdURL := buildImageURL(r.IPXEServiceURL, imageName, imageVersion, initrdDigest)
-	squashFSURL := buildImageURL(r.IPXEServiceURL, imageName, imageVersion, squashFSDigest)
+	var kernelURL, initrdURL, squashFSURL string
+	if kernelDigest != "" {
+		kernelURL = buildImageURL(r.IPXEServiceURL, imageName, imageVersion, kernelDigest)
+	}
+	if initrdDigest != "" {
+		initrdURL = buildImageURL(r.IPXEServiceURL, imageName, imageVersion, initrdDigest)
+	}
+	if squashFSDigest != "" {
+		squashFSURL = buildImageURL(r.IPXEServiceURL, imageName, imageVersion, squashFSDigest)
+	}
 	log.V(1).Info("Built image URLs", "kernelURL", kernelURL, "initrdURL", initrdURL, "squashfsURL", squashFSURL)
 
 	return kernelURL, initrdURL, squashFSURL, nil
@@ -256,10 +263,6 @@ func (r *ServerBootConfigurationPXEReconciler) getLayerDigestsFromNestedManifest
 		case MediaTypeSquashFSOld:
 			squashFSDigest = layer.Digest.String()
 		}
-	}
-
-	if kernelDigest == "" || initrdDigest == "" || squashFSDigest == "" {
-		return "", "", "", fmt.Errorf("failed to find all required layer digests")
 	}
 
 	return kernelDigest, initrdDigest, squashFSDigest, nil

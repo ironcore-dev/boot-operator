@@ -4,9 +4,12 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
+	"text/template"
 
 	"github.com/go-logr/logr"
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
@@ -403,6 +406,41 @@ var _ = Describe("ConfigSelector", func() {
 			_, err := selectBootConfig(ctx, newTestClient(), log, toPointers(items))
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("resolvable ServerBootConfiguration owner"))
+		})
+	})
+
+	Context("iPXE script template", func() {
+		renderIPXEScript := func(data IPXETemplateData) string {
+			tmpl, err := template.ParseFiles("../templates/ipxe-script.tpl")
+			Expect(err).NotTo(HaveOccurred())
+			var buf bytes.Buffer
+			Expect(tmpl.Execute(&buf, data)).To(Succeed())
+			return buf.String()
+		}
+
+		It("includes squashfs kernel params when SquashfsURL is set", func() {
+			script := renderIPXEScript(IPXETemplateData{
+				KernelURL:     "http://example.com/kernel",
+				InitrdURL:     "http://example.com/initrd",
+				SquashfsURL:   "http://example.com/squashfs",
+				IPXEServerURL: "http://example.com",
+			})
+			Expect(script).To(ContainSubstring("set squashfs-url http://example.com/squashfs"))
+			Expect(script).To(ContainSubstring("gl.ovl=/:tmpfs"))
+			Expect(script).To(ContainSubstring("gl.url=${squashfs-url}"))
+			Expect(script).To(ContainSubstring("gl.live=1"))
+		})
+
+		It("omits squashfs kernel params when SquashfsURL is empty", func() {
+			script := renderIPXEScript(IPXETemplateData{
+				KernelURL:     "http://example.com/kernel",
+				InitrdURL:     "http://example.com/initrd",
+				SquashfsURL:   "",
+				IPXEServerURL: "http://example.com",
+			})
+			Expect(strings.Contains(script, "squashfs-url")).To(BeFalse())
+			Expect(strings.Contains(script, "gl.ovl")).To(BeFalse())
+			Expect(strings.Contains(script, "gl.live")).To(BeFalse())
 		})
 	})
 
