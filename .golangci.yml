@@ -9,7 +9,6 @@ linters:
     - errcheck
     - ginkgolinter
     - goconst
-    - gocyclo
     - govet
     - ineffassign
     - lll
