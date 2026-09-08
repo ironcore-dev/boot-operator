@@ -94,7 +94,7 @@ Both CRDs use field indexes (by SystemUUID, IPs, MACs) so the boot server can lo
 
 ## Conventions
 
-- All Go files require an SPDX header: `// SPDX-FileCopyrightText: 2024 SAP SE or an SAP affiliate company and IronCore contributors` / `// SPDX-License-Identifier: Apache-2.0`
+- All Go files require an SPDX header: `// SPDX-FileCopyrightText: SAP SE or an SAP affiliate company and IronCore contributors` / `// SPDX-License-Identifier: Apache-2.0`
 - Tests use Ginkgo/Gomega BDD style; suite setup is in `suite_test.go` next to the tests.
 - Kubebuilder markers (`+kubebuilder:rbac:`, `+kubebuilder:object:root=true`, etc.) drive code and manifest generation — keep them accurate.
 - `--default-httpboot-uki-url` is deprecated; use `--default-httpboot-oci-image` instead.
