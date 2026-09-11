@@ -95,12 +95,13 @@ func (r *HTTPBootConfigReconciler) delete(_ context.Context, log logr.Logger, _ 
 }
 
 func (r *HTTPBootConfigReconciler) patchStatus(ctx context.Context, config *bootv1alpha1.HTTPBootConfig, state bootv1alpha1.HTTPBootConfigState) error {
-	if config.Status.State == state {
+	if config.Status.State == state && config.Status.ObservedGeneration == config.Generation {
 		return nil
 	}
 
 	base := config.DeepCopy()
 	config.Status.State = state
+	config.Status.ObservedGeneration = config.Generation
 
 	if err := r.Status().Patch(ctx, config, client.MergeFrom(base)); err != nil {
 		return err
