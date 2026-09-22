@@ -100,6 +100,7 @@ func (r *IPXEBootConfigReconciler) patchStatus(
 ) error {
 	base := ipxeBootConfig.DeepCopy()
 	ipxeBootConfig.Status.State = state
+	ipxeBootConfig.Status.ObservedGeneration = ipxeBootConfig.Generation
 
 	if err := r.Status().Patch(ctx, ipxeBootConfig, client.MergeFrom(base)); err != nil {
 		return fmt.Errorf("error patching ipxeBootConfig: %w", err)
