@@ -135,6 +135,15 @@ func main() {
 		setupLog.Info("Ignoring --default-httpboot-uki-url because --default-httpboot-oci-image is set")
 	}
 
+	ipxeControllersEnabled := controllers.Enabled(ipxeBootConfigController) || controllers.Enabled(serverBootConfigControllerPxe)
+	httpControllersEnabled := controllers.Enabled(httpBootConfigController) || controllers.Enabled(serverBootConfigControllerHttp)
+	if ipxeControllersEnabled && httpControllersEnabled {
+		setupLog.Error(nil, "invalid controller combination: iPXE and HTTPBoot controllers cannot run together; "+
+			"use --controllers to enable only one boot method group "+
+			"(ipxe group: ipxebootconfig, serverbootconfigpxe; http group: httpbootconfig, serverbootconfighttp)")
+		os.Exit(1)
+	}
+
 	// set the correct ipxe service URL by getting the address from the environment
 	if controllers.Enabled(ipxeBootConfigController) || controllers.Enabled(serverBootConfigControllerPxe) {
 		if ipxeServiceURL == "" {
