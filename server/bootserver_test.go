@@ -138,38 +138,6 @@ var _ = Describe("ConfigSelector", func() {
 			Expect(result.Name).To(Equal("cfg-1"))
 		})
 
-		It("selects the maintenance config from multiple items", func() {
-			server := &metalv1alpha1.Server{
-				ObjectMeta: v1.ObjectMeta{Name: "server-1"},
-				Spec: metalv1alpha1.ServerSpec{
-					BootConfigurationRef:            &metalv1alpha1.ObjectReference{Name: "workload-sbc", Namespace: "default"},
-					MaintenanceBootConfigurationRef: &metalv1alpha1.ObjectReference{Name: "maintenance-sbc", Namespace: "default"},
-				},
-				Status: metalv1alpha1.ServerStatus{
-					State: metalv1alpha1.ServerStateMaintenance,
-				},
-			}
-			workloadSBC := &metalv1alpha1.ServerBootConfiguration{
-				ObjectMeta: v1.ObjectMeta{Name: "workload-sbc", Namespace: "default"},
-				Spec:       metalv1alpha1.ServerBootConfigurationSpec{ServerRef: corev1.LocalObjectReference{Name: "server-1"}},
-			}
-			maintenanceSBC := &metalv1alpha1.ServerBootConfiguration{
-				ObjectMeta: v1.ObjectMeta{Name: "maintenance-sbc", Namespace: "default"},
-				Spec:       metalv1alpha1.ServerBootConfigurationSpec{ServerRef: corev1.LocalObjectReference{Name: "server-1"}},
-			}
-			items := []bootv1alpha1.IPXEBootConfig{
-				{ObjectMeta: v1.ObjectMeta{Name: "ipxe-workload", Namespace: "default", OwnerReferences: []v1.OwnerReference{
-					{APIVersion: "metal.ironcore.dev/v1alpha1", Kind: "ServerBootConfiguration", Name: "workload-sbc", UID: "uid-1"},
-				}}},
-				{ObjectMeta: v1.ObjectMeta{Name: "ipxe-maintenance", Namespace: "default", OwnerReferences: []v1.OwnerReference{
-					{APIVersion: "metal.ironcore.dev/v1alpha1", Kind: "ServerBootConfiguration", Name: "maintenance-sbc", UID: "uid-2"},
-				}}},
-			}
-			k8s := newTestClient(server, workloadSBC, maintenanceSBC)
-			result, err := selectBootConfig(ctx, k8s, log, toPointers(items))
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Name).To(Equal("ipxe-maintenance"))
-		})
 	})
 
 	Context("selectBootConfig with HTTPBootConfig", func() {
@@ -213,83 +181,7 @@ var _ = Describe("ConfigSelector", func() {
 	})
 
 	Context("preferredBootConfigIndex", func() {
-		It("selects the maintenance config when server is in maintenance", func() {
-			server := &metalv1alpha1.Server{
-				ObjectMeta: v1.ObjectMeta{Name: "server-1"},
-				Spec: metalv1alpha1.ServerSpec{
-					BootConfigurationRef: &metalv1alpha1.ObjectReference{
-						Name: "workload-sbc", Namespace: "default",
-					},
-					MaintenanceBootConfigurationRef: &metalv1alpha1.ObjectReference{
-						Name: "maintenance-sbc", Namespace: "default",
-					},
-				},
-				Status: metalv1alpha1.ServerStatus{
-					State: metalv1alpha1.ServerStateMaintenance,
-				},
-			}
-			workloadSBC := &metalv1alpha1.ServerBootConfiguration{
-				ObjectMeta: v1.ObjectMeta{Name: "workload-sbc", Namespace: "default"},
-				Spec: metalv1alpha1.ServerBootConfigurationSpec{
-					ServerRef: corev1.LocalObjectReference{Name: "server-1"},
-				},
-			}
-			maintenanceSBC := &metalv1alpha1.ServerBootConfiguration{
-				ObjectMeta: v1.ObjectMeta{Name: "maintenance-sbc", Namespace: "default"},
-				Spec: metalv1alpha1.ServerBootConfigurationSpec{
-					ServerRef: corev1.LocalObjectReference{Name: "server-1"},
-				},
-			}
-			k8s := newTestClient(server, workloadSBC, maintenanceSBC)
-
-			owners := []sbcRef{
-				{namespace: "default", name: "workload-sbc"},
-				{namespace: "default", name: "maintenance-sbc"},
-			}
-			idx, err := preferredBootConfigIndex(ctx, k8s, log, owners)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(owners[idx].name).To(Equal("maintenance-sbc"))
-		})
-
-		It("selects the workload config when MaintenanceBootConfigurationRef is set but server is not in maintenance state", func() {
-			server := &metalv1alpha1.Server{
-				ObjectMeta: v1.ObjectMeta{Name: "server-1"},
-				Spec: metalv1alpha1.ServerSpec{
-					BootConfigurationRef: &metalv1alpha1.ObjectReference{
-						Name: "workload-sbc", Namespace: "default",
-					},
-					MaintenanceBootConfigurationRef: &metalv1alpha1.ObjectReference{
-						Name: "maintenance-sbc", Namespace: "default",
-					},
-				},
-				Status: metalv1alpha1.ServerStatus{
-					State: metalv1alpha1.ServerStateReserved, // Not in Maintenance!
-				},
-			}
-			workloadSBC := &metalv1alpha1.ServerBootConfiguration{
-				ObjectMeta: v1.ObjectMeta{Name: "workload-sbc", Namespace: "default"},
-				Spec: metalv1alpha1.ServerBootConfigurationSpec{
-					ServerRef: corev1.LocalObjectReference{Name: "server-1"},
-				},
-			}
-			maintenanceSBC := &metalv1alpha1.ServerBootConfiguration{
-				ObjectMeta: v1.ObjectMeta{Name: "maintenance-sbc", Namespace: "default"},
-				Spec: metalv1alpha1.ServerBootConfigurationSpec{
-					ServerRef: corev1.LocalObjectReference{Name: "server-1"},
-				},
-			}
-			k8s := newTestClient(server, workloadSBC, maintenanceSBC)
-
-			owners := []sbcRef{
-				{namespace: "default", name: "workload-sbc"},
-				{namespace: "default", name: "maintenance-sbc"},
-			}
-			idx, err := preferredBootConfigIndex(ctx, k8s, log, owners)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(owners[idx].name).To(Equal("workload-sbc")) // Falls back to workload!
-		})
-
-		It("selects the workload config when server is not in maintenance", func() {
+		It("selects the configured boot config", func() {
 			server := &metalv1alpha1.Server{
 				ObjectMeta: v1.ObjectMeta{Name: "server-1"},
 				Spec: metalv1alpha1.ServerSpec{
