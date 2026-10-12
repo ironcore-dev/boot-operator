@@ -29,8 +29,8 @@ func (r sbcRef) key() string {
 
 // selectBootConfig picks the correct boot config when multiple configs match
 // the same server. It resolves the owning Server, filters out orphaned configs,
-// and prefers the maintenance config during maintenance. T must implement
-// client.Object (satisfied by *IPXEBootConfig, *HTTPBootConfig, etc.).
+// and selects the config owned by the Server's configured boot configuration.
+// T must implement client.Object (satisfied by *IPXEBootConfig, *HTTPBootConfig, etc.).
 func selectBootConfig[T client.Object](ctx context.Context, k8sClient client.Client, log logr.Logger, items []T) (T, error) {
 	var zero T
 	if len(items) == 0 {
@@ -77,10 +77,8 @@ func ownerSBCName(refs []metav1.OwnerReference) string {
 // preferredBootConfigIndex determines which boot config to serve when multiple
 // configs target the same server. It looks up the Server via any owning
 // ServerBootConfiguration, then filters out configs whose owner SBC is not
-// recognized by the Server's bootConfigurationRef or maintenanceBootConfigurationRef.
-// Among recognized configs, it prefers the maintenance config if the server is
-// in maintenance. Each owner carries its own namespace so cross-namespace items
-// are handled correctly.
+// recognized by the Server's bootConfigurationRef. Each owner carries its own
+// namespace so cross-namespace items are handled correctly.
 func preferredBootConfigIndex(ctx context.Context, k8sClient client.Client, log logr.Logger, owners []sbcRef) (int, error) {
 	// Find the Server by looking up any SBC that owns one of the configs.
 	// All configs target the same server (queried by UUID/IP), so any valid
@@ -91,13 +89,9 @@ func preferredBootConfigIndex(ctx context.Context, k8sClient client.Client, log 
 	}
 
 	// Build the set of namespace/name keys the Server recognizes.
-	recognized := make(map[string]bool, 2)
+	recognized := make(map[string]bool, 1)
 	if server.Spec.BootConfigurationRef != nil {
 		ref := sbcRef{namespace: server.Spec.BootConfigurationRef.Namespace, name: server.Spec.BootConfigurationRef.Name}
-		recognized[ref.key()] = true
-	}
-	if server.Spec.MaintenanceBootConfigurationRef != nil {
-		ref := sbcRef{namespace: server.Spec.MaintenanceBootConfigurationRef.Namespace, name: server.Spec.MaintenanceBootConfigurationRef.Name}
 		recognized[ref.key()] = true
 	}
 
@@ -120,21 +114,8 @@ func preferredBootConfigIndex(ctx context.Context, k8sClient client.Client, log 
 		return validIndices[0], nil
 	}
 
-	// Multiple valid configs: prefer the maintenance one if the server is in maintenance.
-	if server.Status.State == metalv1alpha1.ServerStateMaintenance && server.Spec.MaintenanceBootConfigurationRef != nil {
-		maintenanceKey := (sbcRef{
-			namespace: server.Spec.MaintenanceBootConfigurationRef.Namespace,
-			name:      server.Spec.MaintenanceBootConfigurationRef.Name,
-		}).key()
-		for _, i := range validIndices {
-			if owners[i].key() == maintenanceKey {
-				log.Info("Selecting maintenance boot config", "maintenanceSBC", maintenanceKey, "server", server.Name)
-				return i, nil
-			}
-		}
-	}
-
-	// Fall back to the workload config.
+	// Multiple valid configs can only be duplicate children of the configured
+	// ServerBootConfiguration. Return one of them.
 	if server.Spec.BootConfigurationRef != nil {
 		workloadKey := (sbcRef{
 			namespace: server.Spec.BootConfigurationRef.Namespace,
