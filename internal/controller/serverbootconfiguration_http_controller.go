@@ -6,8 +6,14 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"strings"
+	"time"
+
+	remoteerrors "github.com/containerd/containerd/remotes/errors"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 
@@ -89,12 +95,26 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 
 	ukiURL, err := r.constructUKIURL(ctx, config.Spec.Image)
 	if err != nil {
-		log.Error(err, "Failed to construct UKI URL")
 		if patchErr := PatchServerBootConfigWithError(ctx, r.Client,
 			types.NamespacedName{Name: config.Name, Namespace: config.Namespace}, err); patchErr != nil {
 			return ctrl.Result{}, fmt.Errorf("failed to patch state to error: %w (original error: %w)", patchErr, err)
 		}
-		return ctrl.Result{}, err
+		if code, ok := registryHTTPStatusCode(err); ok && (code == 429 || code >= 500) {
+			log.V(1).Info("Registry HTTP error, requeueing after backoff", "statusCode", code, "error", err)
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		}
+		if isTransientNetworkError(err) {
+			log.V(1).Info("Transient network error contacting registry, requeueing after backoff", "error", err)
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		}
+		if isTransientIOError(err) {
+			log.V(1).Info("Transient IO error reading from registry, requeueing after backoff", "error", err)
+			return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+		}
+		log.Error(err, "Failed to construct UKI URL")
+		// Don't requeue — the error is recorded in the status. A future update to
+		// the ServerBootConfiguration (e.g. image field change) will re-trigger reconciliation.
+		return ctrl.Result{}, nil
 	}
 	log.V(1).Info("Extracted UKI URL for boot")
 
@@ -231,6 +251,40 @@ func (r *ServerBootConfigurationHTTPReconciler) getUKIDigestFromNestedManifest(c
 
 func (r *ServerBootConfigurationHTTPReconciler) enqueueServerBootConfigReferencingIgnitionSecret(ctx context.Context, secret client.Object) []reconcile.Request {
 	return EnqueueServerBootConfigsReferencingSecret(ctx, r.Client, secret)
+}
+
+// registryHTTPStatusCode returns the HTTP status code from a containerd
+// remoteerrors.ErrUnexpectedStatus, and true if err is (or wraps) one.
+func registryHTTPStatusCode(err error) (int, bool) {
+	var e remoteerrors.ErrUnexpectedStatus
+	if errors.As(err, &e) {
+		return e.StatusCode, true
+	}
+	return 0, false
+}
+
+// isTransientNetworkError reports whether err is a transient network condition
+// worth retrying. Permanent DNS failures (NXDOMAIN) are excluded — those will
+// not resolve on retry and should be treated as hard errors.
+func isTransientNetworkError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+	return errors.As(err, &dnsErr)
+}
+
+// isTransientIOError reports whether err is a transient IO condition from a
+// registry read (connection closed mid-stream) that is worth retrying.
+func isTransientIOError(err error) bool {
+	return errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF)
 }
 
 // SetupWithManager sets up the controller with the Manager.
