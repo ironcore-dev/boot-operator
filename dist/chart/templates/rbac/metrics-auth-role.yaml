@@ -1,10 +1,8 @@
-{{- if .Values.rbac.enable }}
+{{- if and .Values.metrics.enabled .Values.metrics.secure }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  labels:
-    {{- include "chart.labels" . | nindent 4 }}
-  name: proxy-role
+  name: {{ include "boot-operator.resourceName" (dict "suffix" "metrics-auth-role" "context" $) }}
 rules:
 - apiGroups:
   - authentication.k8s.io
@@ -18,4 +16,4 @@ rules:
   - subjectaccessreviews
   verbs:
   - create
-{{- end -}}
+{{- end }}

@@ -41,27 +41,28 @@ The `values.yaml` file allows you to configure various aspects of the Boot Opera
 
 | Key                                | Description                                                                 | Default Value                  |
 |------------------------------------|-----------------------------------------------------------------------------|--------------------------------|
-| `controllerManager.replicas`       | Number of replicas for the manager deployment                               | `1`                            |
-| `controllerManager.manager.image.repository` | Image repository for the manager container                                  | `registry/boot-operator`      |
-| `controllerManager.manager.image.tag`        | Image tag for the manager container                                         | `"v0.1.0"`                     |
-| `controllerManager.manager.args`             | Arguments for the manager container                                         | `--ipxe-service-url=ipxe-service-url` |
-| `controllerManager.manager.resources`        | Resource requests and limits for the manager container                      | `{cpu: 500m, memory: 128Mi}` (limits), `{cpu: 10m, memory: 64Mi}` (requests) |
-| `controllerManager.manager.livenessProbe`    | Liveness probe configuration for the manager container                      | `{initialDelaySeconds: 15, periodSeconds: 20, httpGet: {path: /healthz, port: 8081}}` |
-| `controllerManager.manager.readinessProbe`   | Readiness probe configuration for the manager container                     | `{initialDelaySeconds: 5, periodSeconds: 10, httpGet: {path: /readyz, port: 8081}}` |
-| `controllerManager.manager.containerSecurityContext`  | Security context for the manager container                                  | `{allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}` |
-| `controllerManager.podSecurityContext`            | Security context for the manager pod                                        | `{runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}` |
-| `controllerManager.terminationGracePeriodSeconds` | Termination grace period for the manager pod                                | `10`                           |
-| `controllerManager.serviceAccountName`         | Service account name for the manager pod                                    | `controller-manager`           |
-| `controllerManager.tolerations`                | Tolerations for the manager pod                                             | `[{key: node-role.kubernetes.io/control-plane, effect: NoSchedule}]` |
-| `controllerManager.hostNetwork`                | Enable host networking for the manager pod                                  | `false`                        |
-| `controllerManager.strategy.type`              | Deployment strategy for the manager pod                                     | `Recreate`                     |
+| `manager.enabled`                  | Install the controller manager deployment                                   | `true`                         |
+| `manager.replicas`                 | Number of replicas for the manager deployment                               | `1`                            |
+| `manager.image.repository`         | Image repository for the manager container                                  | `controller`                   |
+| `manager.image.tag`                | Image tag for the manager container (defaults to `Chart.appVersion`)        | `""`                           |
+| `manager.image.pullPolicy`         | Image pull policy for the manager container                                 | `IfNotPresent`                 |
+| `manager.args`                     | Arguments for the manager container                                         | `[--leader-elect, --ipxe-service-url=ipxe-service-url]` |
+| `manager.resources`                | Resource requests and limits for the manager container                      | `{cpu: 500m, memory: 128Mi}` (limits), `{cpu: 10m, memory: 64Mi}` (requests) |
+| `manager.healthProbe.port`         | Port serving the `/healthz` and `/readyz` endpoints                         | `8081`                         |
+| `manager.securityContext`          | Container-level security context                                            | `{allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}` |
+| `manager.podSecurityContext`       | Pod-level security context                                                  | `{runAsNonRoot: true, seccompProfile: {type: RuntimeDefault}}` |
+| `manager.terminationGracePeriodSeconds` | Termination grace period for the manager pod                           | `10`                           |
+| `manager.tolerations`              | Tolerations for the manager pod                                             | `[]`                           |
+| `manager.nodeSelector`             | Node selector for the manager pod                                           | `{}`                           |
+| `manager.affinity`                 | Affinity rules for the manager pod                                          | `{}`                           |
 
-- **rbac**: Enable or disable RBAC.
-- **crd**: Enable or disable CRDs.
-- **metrics**: Enable or disable metrics export.
+- **serviceAccount**: Install and configure the manager ServiceAccount.
+- **rbac**: Configure RBAC scope (`namespaced`) and optional CRD helper roles (`helpers.enabled`).
+- **crd**: Install CRDs with the chart (`enabled`) and keep them on uninstall (`keep`).
+- **metrics**: Enable or disable the metrics endpoint (`enabled`, `port`, `secure`).
 - **webhook**: Enable or disable webhooks.
-- **prometheus**: Enable or disable Prometheus ServiceMonitor.
-- **certmanager**: Enable or disable cert-manager injection.
+- **prometheus**: Enable or disable the Prometheus ServiceMonitor.
+- **certManager**: Enable or disable cert-manager integration for TLS certificates.
 - **networkPolicy**: Enable or disable NetworkPolicies.
 
 Refer to the `values.yaml` file for more details on each configuration option.
