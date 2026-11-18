@@ -9,7 +9,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -127,10 +126,8 @@ func (r *HTTPBootConfigReconciler) enqueueHTTPBootConfigReferencingIgnitionSecre
 		if config.Spec.IgnitionSecretRef != nil &&
 			config.Spec.IgnitionSecretRef.Name == secretObj.Name {
 			requests = append(requests, reconcile.Request{
-				NamespacedName: types.NamespacedName{
-					Name:      config.Name,
-					Namespace: config.Namespace,
-				},
+				Name:      config.Name,
+				Namespace: config.Namespace,
 			})
 		}
 	}

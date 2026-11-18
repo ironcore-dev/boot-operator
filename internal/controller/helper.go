@@ -16,7 +16,9 @@ limitations under the License.
 
 package controller
 
-import "sigs.k8s.io/controller-runtime/pkg/client"
+import (
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
 
 const (
 	fieldOwner = client.FieldOwner("boot.ironcore.dev/controller-manager")

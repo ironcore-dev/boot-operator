@@ -11,15 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/config"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	"github.com/ironcore-dev/controller-utils/modutils"
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -129,9 +126,7 @@ func SetupTest() *corev1.Namespace {
 		DeferCleanup(cancel)
 
 		*ns = corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "test-",
-			},
+			GenerateName: "test-",
 		}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed(), "failed to create test namespace")
 		DeferCleanup(k8sClient.Delete, ns)
@@ -144,10 +139,12 @@ func SetupTest() *corev1.Namespace {
 			Controller: config.Controller{
 				// need to skip unique controller name validation
 				// since all tests need a dedicated controller
-				SkipNameValidation: ptr.To(true),
+				SkipNameValidation: new(true),
 			},
 		})
 		Expect(err).ToNot(HaveOccurred())
+
+		Expect(IndexServerBootConfigByServerRef(ctx, k8sManager.GetFieldIndexer())).To(Succeed())
 
 		registryValidator := registry.NewValidator(allowedRegistries)
 
@@ -165,6 +162,11 @@ func SetupTest() *corev1.Namespace {
 			ImageServerURL:    "http://localhost:5000/httpboot",
 			Architecture:      runtime.GOARCH,
 			RegistryValidator: registryValidator,
+		}).SetupWithManager(k8sManager)).To(Succeed())
+
+		Expect((&HTTPBootConfigReconciler{
+			Client: k8sManager.GetClient(),
+			Scheme: k8sManager.GetScheme(),
 		}).SetupWithManager(k8sManager)).To(Succeed())
 
 		go func() {

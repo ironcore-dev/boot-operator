@@ -6,6 +6,7 @@ package controller
 import (
 	"errors"
 	"net/url"
+	"reflect"
 	"testing"
 
 	metalv1alpha1 "github.com/ironcore-dev/metal-operator/api/v1alpha1"
@@ -73,6 +74,47 @@ func TestBuildImageReference(t *testing.T) {
 	}
 }
 
+func TestExtractServerIPs(t *testing.T) {
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		want        []string
+	}{
+		{
+			name:        "happy path, multiple IPs",
+			annotations: map[string]string{metalv1alpha1.IPsAnnotation: "10.0.0.23,2001:db8::23"},
+			want:        []string{"10.0.0.23", "2001:db8::23"},
+		},
+		{
+			name:        "whitespace trimmed",
+			annotations: map[string]string{metalv1alpha1.IPsAnnotation: " 10.0.0.23 , 2001:db8::23 "},
+			want:        []string{"10.0.0.23", "2001:db8::23"},
+		},
+		{
+			name:        "invalid entries skipped",
+			annotations: map[string]string{metalv1alpha1.IPsAnnotation: "10.0.0.23,not-an-ip,,2001:db8::23"},
+			want:        []string{"10.0.0.23", "2001:db8::23"},
+		},
+		{
+			name:        "missing annotation returns nil",
+			annotations: nil,
+			want:        nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := &metalv1alpha1.Server{
+				Annotations: tt.annotations,
+			}
+			got := ExtractServerIPs(server)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ExtractServerIPs() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestImageURLFromSpecImage(t *testing.T) {
 	// Regression test for the URL construction step.
 	// The old strings.Split(image, ":") code split
@@ -119,9 +161,7 @@ var _ = Describe("PatchServerBootConfigWithError", func() {
 	BeforeEach(func(ctx SpecContext) {
 		By("creating a test namespace")
 		ns = &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "test-",
-			},
+			GenerateName: "test-",
 		}
 		Expect(k8sClient.Create(ctx, ns)).To(Succeed())
 		DeferCleanup(k8sClient.Delete, ns)
@@ -130,10 +170,8 @@ var _ = Describe("PatchServerBootConfigWithError", func() {
 	It("should patch ServerBootConfiguration with error state and condition", func(ctx SpecContext) {
 		By("creating a ServerBootConfiguration")
 		config := &metalv1alpha1.ServerBootConfiguration{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-config",
-				Namespace: ns.Name,
-			},
+			Name:      "test-config",
+			Namespace: ns.Name,
 			Spec: metalv1alpha1.ServerBootConfigurationSpec{
 				ServerRef: corev1.LocalObjectReference{Name: "test-server"},
 				Image:     "test-image:latest",
@@ -179,10 +217,8 @@ var _ = Describe("PatchServerBootConfigWithError", func() {
 	It("should update existing condition if called multiple times", func(ctx SpecContext) {
 		By("creating a ServerBootConfiguration")
 		config := &metalv1alpha1.ServerBootConfiguration{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-config-update",
-				Namespace: ns.Name,
-			},
+			Name:      "test-config-update",
+			Namespace: ns.Name,
 			Spec: metalv1alpha1.ServerBootConfigurationSpec{
 				ServerRef: corev1.LocalObjectReference{Name: "test-server"},
 				Image:     "test-image:latest",

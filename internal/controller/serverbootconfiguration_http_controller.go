@@ -28,7 +28,6 @@ import (
 
 	"github.com/go-logr/logr"
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -81,17 +80,32 @@ func (r *ServerBootConfigurationHTTPReconciler) delete(ctx context.Context, log 
 func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, log logr.Logger, config *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
 	log.V(1).Info("Reconciling ServerBootConfiguration for HTTPBoot")
 
-	systemUUID, err := r.getSystemUUIDFromServer(ctx, config)
+	server, err := getServerFromConfig(ctx, r.Client, config)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get system UUID from Server: %w", err)
+		return ctrl.Result{}, err
 	}
+	systemUUID := server.Spec.SystemUUID
 	log.V(1).Info("Got system UUID from Server", "systemUUID", systemUUID)
 
-	networkIdentifiers, err := r.getSystemNetworkIDsFromServer(ctx, config)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get Network Identifiers from Server: %w", err)
+	serverIPs := ExtractServerIPs(server)
+	log.V(1).Info("Got Network Identifiers from Server", "networkIdentifiers", serverIPs)
+
+	if len(serverIPs) == 0 {
+		log.V(1).Info("Server has no IPs on the metal.ironcore.dev/ips annotation, marking Pending")
+		// Withdraw any previously-applied child so its stale IP-index entries no longer
+		// match clients at /httpboot. No-op when no child exists (initial missing-IP case).
+		child := &bootv1alpha1.HTTPBootConfig{
+			Namespace: config.Namespace, Name: config.Name,
+		}
+		if err := r.Delete(ctx, child); client.IgnoreNotFound(err) != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to delete stale HTTPBoot config: %w", err)
+		}
+		if err := PatchServerBootConfigPending(ctx, r.Client,
+			types.NamespacedName{Name: config.Name, Namespace: config.Namespace}); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch state to pending: %w", err)
+		}
+		return ctrl.Result{}, nil
 	}
-	log.V(1).Info("Got Network Identifiers from Server", "networkIdentifiers", networkIdentifiers)
 
 	ukiURL, err := r.constructUKIURL(ctx, config.Spec.Image)
 	if err != nil {
@@ -119,17 +133,13 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 	log.V(1).Info("Extracted UKI URL for boot")
 
 	httpBootConfig := &bootv1alpha1.HTTPBootConfig{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "boot.ironcore.dev/v1alpha1",
-			Kind:       "HTTPBootConfig",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: config.Namespace,
-			Name:      config.Name,
-		},
+		APIVersion: "boot.ironcore.dev/v1alpha1",
+		Kind:       "HTTPBootConfig",
+		Namespace:  config.Namespace,
+		Name:       config.Name,
 		Spec: bootv1alpha1.HTTPBootConfigSpec{
 			SystemUUID:         systemUUID,
-			NetworkIdentifiers: networkIdentifiers,
+			NetworkIdentifiers: serverIPs,
 			UKIURL:             ukiURL,
 		},
 	}
@@ -165,9 +175,8 @@ func (r *ServerBootConfigurationHTTPReconciler) reconcile(ctx context.Context, l
 }
 
 func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ctx context.Context, httpBootConfig *bootv1alpha1.HTTPBootConfig, cfg *metalv1alpha1.ServerBootConfiguration) error {
-	key := types.NamespacedName{Name: cfg.Name, Namespace: cfg.Namespace}
 	var cur metalv1alpha1.ServerBootConfiguration
-	if err := r.Get(ctx, key, &cur); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Name: cfg.Name, Namespace: cfg.Namespace}, &cur); err != nil {
 		return err
 	}
 	base := cur.DeepCopy()
@@ -175,8 +184,8 @@ func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ct
 	switch httpBootConfig.Status.State {
 	case bootv1alpha1.HTTPBootConfigStateReady:
 		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
-		// Remove ImageValidation condition when transitioning to Ready
 		apimeta.RemoveStatusCondition(&cur.Status.Conditions, "ImageValidation")
+		apimeta.RemoveStatusCondition(&cur.Status.Conditions, "NetworkIdentifiersMissing")
 	case bootv1alpha1.HTTPBootConfigStateError:
 		cur.Status.State = metalv1alpha1.ServerBootConfigurationStateError
 	}
@@ -186,25 +195,6 @@ func (r *ServerBootConfigurationHTTPReconciler) patchConfigStateFromHTTPState(ct
 	}
 
 	return r.Status().Patch(ctx, &cur, client.MergeFrom(base))
-}
-
-// getSystemUUIDFromServer fetches the UUID from the referenced Server object.
-func (r *ServerBootConfigurationHTTPReconciler) getSystemUUIDFromServer(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {
-	server := &metalv1alpha1.Server{}
-	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
-		return "", fmt.Errorf("failed to get Server: %w", err)
-	}
-	return server.Spec.SystemUUID, nil
-}
-
-// getSystemNetworkIDsFromServer fetches the IPs and MAC addresses from the network interfaces of the referenced Server object.
-func (r *ServerBootConfigurationHTTPReconciler) getSystemNetworkIDsFromServer(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) ([]string, error) {
-	server := &metalv1alpha1.Server{}
-	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
-		return nil, fmt.Errorf("failed to get Server: %w", err)
-	}
-
-	return ExtractServerNetworkIDs(server, true), nil
 }
 
 func (r *ServerBootConfigurationHTTPReconciler) constructUKIURL(ctx context.Context, image string) (string, error) {
@@ -253,6 +243,10 @@ func (r *ServerBootConfigurationHTTPReconciler) enqueueServerBootConfigReferenci
 	return EnqueueServerBootConfigsReferencingSecret(ctx, r.Client, secret)
 }
 
+func (r *ServerBootConfigurationHTTPReconciler) enqueueServerBootConfigReferencingServer(ctx context.Context, server client.Object) []reconcile.Request {
+	return EnqueueServerBootConfigsReferencingServer(ctx, r.Client, server)
+}
+
 // registryHTTPStatusCode returns the HTTP status code from a containerd
 // remoteerrors.ErrUnexpectedStatus, and true if err is (or wraps) one.
 func registryHTTPStatusCode(err error) (int, bool) {
@@ -295,6 +289,10 @@ func (r *ServerBootConfigurationHTTPReconciler) SetupWithManager(mgr ctrl.Manage
 		Watches(
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.enqueueServerBootConfigReferencingIgnitionSecret),
+		).
+		Watches(
+			&metalv1alpha1.Server{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueServerBootConfigReferencingServer),
 		).
 		Complete(r)
 }
