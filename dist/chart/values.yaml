@@ -1,92 +1,201 @@
-# [MANAGER]: Manager Deployment Configurations
-controllerManager:
-  enable: true
+## String to partially override chart.fullname template (will maintain the release name)
+##
+# nameOverride: ""
+
+## String to fully override chart.fullname template
+##
+# fullnameOverride: ""
+
+## Configure the controller manager deployment
+##
+manager:
+  ## Set to false to skip manager installation
+  ##
+  enabled: true
+
   replicas: 1
-  manager:
-    image:
-      repository: registry/boot-operator
-      tag: "v0.1.0"
-    args:
-      - "--ipxe-service-url=ipxe-service-url"
-    resources:
-      limits:
-        cpu: 500m
-        memory: 128Mi
-      requests:
-        cpu: 10m
-        memory: 64Mi
-    livenessProbe:
-      initialDelaySeconds: 15
-      periodSeconds: 20
-      httpGet:
-        path: /healthz
-        port: 8081
-    readinessProbe:
-      initialDelaySeconds: 5
-      periodSeconds: 10
-      httpGet:
-        path: /readyz
-        port: 8081
-    containerSecurityContext:
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop:
-          - "ALL"
+
+  image:
+    repository: controller
+    ## Image tag (defaults to Chart.appVersion if not set)
+    ##
+    # tag: ""
+    pullPolicy: IfNotPresent
+
+  ## Arguments
+  ##
+  args:
+    - --leader-elect
+    - --ipxe-service-url=ipxe-service-url
+
+  ## Health probes.
+  ## The manager serves the liveness (/healthz) and readiness (/readyz) endpoints on this port.
+  ##
+  healthProbe:
+    # Health probe server port
+    port: 8081
+
+  ## Image pull secrets
+  ##
+  # imagePullSecrets:
+  #   - name: myregistrykey
+
+  ## Pod-level security settings
+  ##
   podSecurityContext:
     runAsNonRoot: true
     seccompProfile:
       type: RuntimeDefault
+
+  ## Container-level security settings
+  ##
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+      - ALL
+
+  ## Resource limits and requests
+  ##
+  resources:
+    limits:
+      cpu: 500m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+
+  ## Manager pod's affinity
+  ##
+  affinity: {}
+
+  ## Manager pod's node selector
+  ##
+  nodeSelector: {}
+
+  ## Manager pod's tolerations
+  ##
+  tolerations: []
+
+  ## Deployment strategy
+  ##
+  # strategy:
+  #   type: RollingUpdate
+  #   rollingUpdate:
+  #     maxSurge: 25%
+  #     maxUnavailable: 25%
+
+  ## Priority class name
+  ##
+  # priorityClassName: ""
+
+  ## Topology spread constraints
+  ##
+  # topologySpreadConstraints: []
+
+  ## Termination grace period seconds
+  ##
   terminationGracePeriodSeconds: 10
-  serviceAccountName: controller-manager
-  hostNetwork: false
-  strategy:
-    type: Recreate
-  tolerations:
-    - key: node-role.kubernetes.io/control-plane
-      effect: NoSchedule
 
-service:
-  enable: false
-  port: 8082
+  ## Custom Deployment labels
+  ##
+  # labels: {}
 
-# [RBAC]: To enable RBAC (Permissions) configurations
+  ## Custom Deployment annotations
+  ##
+  # annotations: {}
+
+  ## Custom Pod labels and annotations
+  ##
+  # pod:
+  #   labels: {}
+  #   annotations: {}
+
+## RBAC configuration
+##
 rbac:
-  enable: true
+  ## RBAC resource scope
+  ## - false (default): ClusterRole/ClusterRoleBinding (all namespaces)
+  ## - true: Role/RoleBinding (release namespace only)
+  ##
+  namespaced: false
 
-# [CRDs]: To enable the CRDs
+  ## Helper roles for CRD management (admin/editor/viewer)
+  ##
+  helpers:
+    ## Install convenience admin/editor/viewer roles for CRDs
+    ##
+    enabled: false
+
+## ServiceAccount configuration
+##
+serviceAccount:
+  # Install default ServiceAccount provided
+  enabled: true
+
+  ## Existing ServiceAccount name (required when enabled=false)
+  ## Set to "default" to use the namespace default ServiceAccount
+  ## Note: When enabled=true, respects nameOverride/fullnameOverride
+  ##
+  # name: ""
+
+  ## Custom ServiceAccount annotations
+  ##
+  # annotations: {}
+
+  ## Custom ServiceAccount labels
+  ##
+  # labels: {}
+
+## Custom Resource Definitions
+##
 crd:
-  # This option determines whether the CRDs are included
-  # in the installation process.
-  enable: true
+  # Install CRDs with the chart
+  enabled: true
+  # Keep CRDs when uninstalling
+  keep: true
 
-  # Enabling this option adds the "helm.sh/resource-policy": keep
-  # annotation to the CRD, ensuring it remains installed even when
-  # the Helm release is uninstalled.
-  # NOTE: Removing the CRDs will also remove all cert-manager CR(s)
-  # (Certificates, Issuers, ...) due to garbage collection.
-  keep: false
-
-# [METRICS]: Set to true to generate manifests for exporting metrics.
-# To disable metrics export set false, and ensure that the
-# ControllerManager argument "--metrics-bind-address=:8443" is removed.
+## Controller metrics endpoint.
+## Enable to expose /metrics endpoint
+##
 metrics:
-  enable: false
+  enabled: true
+  # Metrics server port
+  port: 8443
+  # Enable secure metrics: HTTPS with certs/auth (true) or HTTP (false).
+  # Note: Metrics authn/authz needs ClusterRole access.
+  secure: true
 
-# [WEBHOOKS]: Webhooks configuration
-# The following configuration is automatically generated from the manifests
-# generated by controller-gen. To update run 'make manifests' and
-# the edit command with the '--force' flag
+## Cert-manager integration for TLS certificates.
+## Required for webhook certificates and metrics endpoint certificates.
+##
+certManager:
+  enabled: true
+
+## Webhook server configuration
+##
 webhook:
-  enable: true
+  enabled: false
+  # Webhook server port
+  port: 9443
 
-# [PROMETHEUS]: To enable a ServiceMonitor to export metrics to Prometheus set true
+## Prometheus ServiceMonitor for metrics scraping.
+## Requires prometheus-operator to be installed in the cluster.
+##
 prometheus:
-  enable: false
+  enabled: false
 
-# [CERT-MANAGER]: To enable cert-manager injection to webhooks set true
-certmanager:
-  enable: true
+  ## Custom ServiceMonitor labels
+  ##
+  # labels: {}
 
-# [NETWORK POLICIES]: To enable NetworkPolicies set true
+  ## Custom ServiceMonitor annotations
+  ##
+  # annotations: {}
+
+## Network policies for controlling traffic flow.
+## Enable to restrict ingress to the controller manager.
+##
 networkPolicy:
-  enable: false
+  enabled: false
+

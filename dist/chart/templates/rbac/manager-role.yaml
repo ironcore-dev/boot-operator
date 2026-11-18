@@ -1,11 +1,14 @@
-{{- if .Values.rbac.enable }}
----
 apiVersion: rbac.authorization.k8s.io/v1
+{{- if .Values.rbac.namespaced }}
+kind: Role
+{{- else }}
 kind: ClusterRole
+{{- end }}
 metadata:
-  labels:
-    {{- include "chart.labels" . | nindent 4 }}
-  name: boot-operator-manager-role
+{{- if .Values.rbac.namespaced }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
+  name: {{ include "boot-operator.resourceName" (dict "suffix" "manager-role" "context" $) }}
 rules:
 - apiGroups:
   - ""
@@ -86,4 +89,3 @@ rules:
   - get
   - patch
   - update
-{{- end -}}
