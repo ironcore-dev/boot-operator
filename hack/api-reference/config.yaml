@@ -6,7 +6,7 @@ processor:
     - "List$"
 
 render:
-  kubernetesVersion: "1.35"
+  kubernetesVersion: "1.37"
   externalPackages:
     - typeMatchPrefix: "^net/netip"
       docsURLTemplate: "https://pkg.go.dev/net/netip#{{.TypeIdentifier}}"

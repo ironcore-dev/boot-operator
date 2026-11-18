@@ -2,29 +2,23 @@ name: Check Codegen
 
 on:
   pull_request:
-    paths-ignore:
-    - 'docs/**'
-    - '**/*.md'
 
 jobs:
   check-codegen:
+    name: Run code generation checks
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v7
-    - uses: actions/setup-go@v7
+    - uses: actions/checkout@v4
+    - uses: actions/setup-go@v5
       with:
         go-version-file: 'go.mod'
-    - name: Run make generate
-      run: make generate
-    - name: Run make docs
-      run: make docs
-    - name: Run make helm
-      run: make helm
-    - name: Compare the expected and actual generated/* directories
+    - name: Run code gen checks
+      run: make check-gen
+    - name: Compare the expected and actual generated files
       run: |
-        if [ "$(git diff | wc -l)" -gt "0" ]; then
-          echo "Detected uncommitted changes after build. Consider running 'make generate && make docs && make helm'."
+        if [ -n "$(git status --porcelain=v1)" ]; then
+          echo "Detected uncommitted changes after build. Consider running 'make generate manifests docs helm fmt'."
           echo "See status below:"
-          git diff
+          git status --porcelain=v1
           exit 1
         fi

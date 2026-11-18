@@ -378,25 +378,20 @@ func handleDockerRegistry(w http.ResponseWriter, r *http.Request, imageDetails *
 	}
 
 	proxy := &httputil.ReverseProxy{
-		Director:       buildDirector(proxyURL, authToken, repository, digest),
+		Rewrite:        buildRewrite(proxyURL, authToken, repository, digest),
 		ModifyResponse: buildModifyResponse(),
 	}
-
-	r.URL.Host = proxyURL.Host
-	r.URL.Scheme = proxyURL.Scheme
-	r.Host = proxyURL.Host
 
 	log.Info("Proxying registry request", "targetURL", proxyURL.String(), "authMethod", registryInfo.AuthMethod)
 	proxy.ServeHTTP(w, r)
 }
 
-func buildDirector(proxyURL *url.URL, bearerToken string, repository string, digest string) func(*http.Request) {
-	return func(req *http.Request) {
-		req.URL.Scheme = proxyURL.Scheme
-		req.URL.Host = proxyURL.Host
-		req.URL.Path = fmt.Sprintf("/v2/%s/blobs/%s", repository, digest)
+func buildRewrite(proxyURL *url.URL, bearerToken string, repository string, digest string) func(*httputil.ProxyRequest) {
+	return func(req *httputil.ProxyRequest) {
+		req.SetURL(proxyURL)
+		req.Out.URL.Path = fmt.Sprintf("/v2/%s/blobs/%s", repository, digest)
 		if bearerToken != "" {
-			req.Header.Set("Authorization", "Bearer "+bearerToken)
+			req.Out.Header.Set("Authorization", "Bearer "+bearerToken)
 		}
 	}
 }
