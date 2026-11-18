@@ -54,6 +54,9 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
+.PHONY: check-gen
+check-gen: generate manifests docs helm fmt ## Run all code generation and formatting checks.
+
 .PHONY: fmt
 fmt: goimports ## Run goimports against code.
 	$(GOIMPORTS) -w .
@@ -71,7 +74,10 @@ check-license: addlicense ## Check that every file has a license header present.
 	find . -name '*.go' -exec $(ADDLICENSE) -check -c 'IronCore authors' {} +
 
 .PHONY: test
-test: manifests generate fmt vet setup-envtest ## Run tests.
+test: manifests generate fmt vet test-only ## Run tests.
+
+.PHONY: test-only
+test-only: setup-envtest ## Run tests without generating manifests or code.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 # TODO(user): To use a different vendor for e2e tests, modify the setup under 'tests/e2e'.
@@ -193,20 +199,19 @@ ADDLICENSE ?= $(LOCALBIN)/addlicense
 GOIMPORTS ?= $(LOCALBIN)/goimports
 CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
 KUBEBUILDER ?= $(LOCALBIN)/kubebuilder
-SETUP_ENVTEST_VERSION ?= v0.17.1   # example pre-0.22
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v5.5.0
-CONTROLLER_TOOLS_VERSION ?= v0.17.1
+KUSTOMIZE_VERSION ?= v5.8.2
+CONTROLLER_TOOLS_VERSION ?= v0.23.0
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 #ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
 ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d.%d",$$3, $$2}')
-GOLANGCI_LINT_VERSION ?= v2.6
-ADDLICENSE_VERSION ?= v1.1.1
-GOIMPORTS_VERSION ?= v0.31.0
-CRD_REF_DOCS_VERSION ?= v0.2.0
-KUBEBUILDER_VERSION ?= v4.5.1
+GOLANGCI_LINT_VERSION ?= v2.15
+ADDLICENSE_VERSION ?= v1.2.0
+GOIMPORTS_VERSION ?= v0.52.0
+CRD_REF_DOCS_VERSION ?= v0.3.0
+KUBEBUILDER_VERSION ?= v4.16.0
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
