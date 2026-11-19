@@ -69,6 +69,9 @@ jobs:
 #          helm repo update
 #          helm install prometheus-crds prometheus-community/prometheus-operator-crds
 
+      - name: Install metal-operator CRDs the controllers watch
+        run: make install-metal-crds
+
       - name: Deploy manager via Helm
         run: |
           make helm-deploy

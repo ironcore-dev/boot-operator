@@ -4,7 +4,6 @@
 package main
 
 import (
-	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
@@ -24,7 +23,6 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	controllerconfig "sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -306,24 +304,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := IndexIPXEBootConfigBySystemUUID(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to set up indexer for IPXEBootConfig SystemUUID")
-		os.Exit(1)
+	indexers := []struct {
+		name  string
+		setup func() error
+	}{
+		{"IPXEBootConfig SystemUUID", func() error { return controller.IndexIPXEBootConfigBySystemUUID(ctx, mgr.GetFieldIndexer()) }},
+		{"HTTPBootConfig SystemUUID", func() error { return controller.IndexHTTPBootConfigBySystemUUID(ctx, mgr.GetFieldIndexer()) }},
+		{"IPXEBootConfig SystemIPs", func() error { return controller.IndexIPXEBootConfigBySystemIPs(ctx, mgr.GetFieldIndexer()) }},
+		{"HTTPBootConfig NetworkIdentifiers", func() error { return controller.IndexHTTPBootConfigByNetworkIDs(ctx, mgr.GetFieldIndexer()) }},
+		{"ServerBootConfiguration ServerRef", func() error { return controller.IndexServerBootConfigByServerRef(ctx, mgr.GetFieldIndexer()) }},
 	}
-
-	if err := IndexHTTPBootConfigBySystemUUID(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to set up indexer for HTTPBootConfig SystemUUID")
-		os.Exit(1)
-	}
-
-	if err := IndexIPXEBootConfigBySystemIPs(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to set up indexer for IPXEBootConfig SystemIPs")
-		os.Exit(1)
-	}
-
-	if err := IndexHTTPBootConfigByNetworkIDs(ctx, mgr); err != nil {
-		setupLog.Error(err, "unable to set up indexer for HTTPBootConfig NetworkIdentifiers")
-		os.Exit(1)
+	for _, idx := range indexers {
+		if err := idx.setup(); err != nil {
+			setupLog.Error(err, "unable to set up indexer for "+idx.name)
+			os.Exit(1)
+		}
 	}
 
 	setupLog.Info("starting boot-server")
@@ -352,51 +347,4 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
-
-func IndexIPXEBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) error {
-	return mgr.GetFieldIndexer().IndexField(
-		ctx,
-		&bootv1alpha1.IPXEBootConfig{},
-		bootv1alpha1.SystemUUIDIndexKey,
-		func(Obj client.Object) []string {
-			ipxeBootConfig := Obj.(*bootv1alpha1.IPXEBootConfig)
-			return []string{ipxeBootConfig.Spec.SystemUUID}
-		},
-	)
-}
-
-func IndexIPXEBootConfigBySystemIPs(ctx context.Context, mgr ctrl.Manager) error {
-	return mgr.GetFieldIndexer().IndexField(
-		ctx, &bootv1alpha1.IPXEBootConfig{},
-		bootv1alpha1.SystemIPIndexKey,
-		func(Obj client.Object) []string {
-			ipxeBootConfig := Obj.(*bootv1alpha1.IPXEBootConfig)
-			return ipxeBootConfig.Spec.SystemIPs
-		},
-	)
-}
-
-func IndexHTTPBootConfigBySystemUUID(ctx context.Context, mgr ctrl.Manager) error {
-	return mgr.GetFieldIndexer().IndexField(
-		ctx,
-		&bootv1alpha1.HTTPBootConfig{},
-		bootv1alpha1.SystemUUIDIndexKey,
-		func(Obj client.Object) []string {
-			HTTPBootConfig := Obj.(*bootv1alpha1.HTTPBootConfig)
-			return []string{HTTPBootConfig.Spec.SystemUUID}
-		},
-	)
-}
-
-func IndexHTTPBootConfigByNetworkIDs(ctx context.Context, mgr ctrl.Manager) error {
-	return mgr.GetFieldIndexer().IndexField(
-		ctx,
-		&bootv1alpha1.HTTPBootConfig{},
-		bootv1alpha1.NetworkIdentifierIndexKey,
-		func(Obj client.Object) []string {
-			HTTPBootConfig := Obj.(*bootv1alpha1.HTTPBootConfig)
-			return HTTPBootConfig.Spec.NetworkIdentifiers
-		},
-	)
 }

@@ -51,6 +51,11 @@ var _ = Describe("controller", Ordered, func() {
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to install CRDs")
 
+		By("installing metal-operator CRDs the controllers watch")
+		cmd = exec.Command("make", "install-metal-crds")
+		_, err = utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred(), "Failed to install metal-operator CRDs")
+
 		By("deploying the controller-manager")
 		cmd = exec.Command("make", "e2e-deploy", fmt.Sprintf("IMG=%s", projectImage))
 		_, err = utils.Run(cmd)

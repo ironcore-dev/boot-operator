@@ -12,8 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 )
 
@@ -34,10 +32,8 @@ var _ = Describe("IPXEBootConfig Controller", func() {
 			err := k8sClient.Get(ctx, typeNamespacedName, ipxebootconfig)
 			if err != nil && errors.IsNotFound(err) {
 				resource := &bootv1alpha1.IPXEBootConfig{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
+					Name:      resourceName,
+					Namespace: "default",
 					Spec: bootv1alpha1.IPXEBootConfigSpec{
 						KernelURL: "http://example.com/kernel",
 						InitrdURL: "http://example.com/initrd",
