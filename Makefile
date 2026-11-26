@@ -159,6 +159,12 @@ endif
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/crd | $(KUBECTL) apply -f -
 
+.PHONY: install-metal-crds
+install-metal-crds: ## Install metal-operator CRDs (Server, ServerBootConfiguration) the controllers watch. Sourced from the Go module cache.
+	$(eval METAL_DIR := $(shell go list -m -f '{{.Dir}}' github.com/ironcore-dev/metal-operator))
+	$(KUBECTL) apply -f $(METAL_DIR)/config/crd/bases/metal.ironcore.dev_servers.yaml
+	$(KUBECTL) apply -f $(METAL_DIR)/config/crd/bases/metal.ironcore.dev_serverbootconfigurations.yaml
+
 .PHONY: uninstall
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -

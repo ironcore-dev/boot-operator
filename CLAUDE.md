@@ -41,12 +41,18 @@ Boot-operator is a Kubernetes controller that automates network boot (HTTPBoot/P
 
 1. **metal-operator** creates a `ServerBootConfiguration` CR referencing a `Server` CR and an OCI boot image.
 2. Boot-operator's `ServerBootConfigurationHTTPReconciler` or `ServerBootConfigurationPXEReconciler` detects this and:
-   - Extracts the system UUID and network identifiers (IPs/MACs) from the `Server` CR.
+   - Extracts the system UUID from the `Server` CR and the system IPs from the
+     `metal.ironcore.dev/ips` annotation on the `Server` (comma-separated IPs, no MACs).
+     If the annotation is absent or has no valid IPs, the `ServerBootConfiguration` is set
+     to `Pending` with a `NetworkIdentifiersMissing` condition and no child boot config is
+     applied — a transient state until an external publisher (IPAM/FeDHCP) populates it.
+     Requires a metal-operator version containing PR #1152 (first unreleased on `main`
+     after v0.8.0), which dropped `Server.Status.NetworkInterfaces`.
    - Queries the OCI registry to resolve the image manifest for the target architecture.
    - Extracts layer digests (UKI for HTTPBoot; kernel/initrd/squashfs for iPXE).
    - Creates/updates an `HTTPBootConfig` or `IPXEBootConfig` CR with constructed download URLs.
 3. Booting systems call the HTTP boot server endpoints:
-   - `/httpboot` — returns the UKI URL, matched by requesting system IP against `HTTPBootConfig.NetworkIdentifiers`
+   - `/httpboot` — returns the UKI URL, matched by requesting system IP against `HTTPBootConfig.Spec.NetworkIdentifiers`
    - `/ipxe/<uuid>` — returns an iPXE script with kernel/initrd/squashfs URLs
    - `/ignition/<uuid>` — returns the Ignition config for the system UUID
 

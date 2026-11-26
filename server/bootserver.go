@@ -13,6 +13,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/ironcore-dev/boot-operator/internal/controller"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -76,14 +77,14 @@ func RunBootServer(
 		}
 
 		ipxeBootConfigList := &bootv1alpha1.IPXEBootConfigList{}
-		err := k8sClient.List(r.Context(), ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid})
+		err := k8sClient.List(r.Context(), ipxeBootConfigList, client.MatchingFields{controller.SystemUUIDIndexKey: uuid})
 		if client.IgnoreNotFound(err) != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 
 		if len(ipxeBootConfigList.Items) == 0 {
-			err := k8sClient.List(r.Context(), ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToUpper(uuid)})
+			err := k8sClient.List(r.Context(), ipxeBootConfigList, client.MatchingFields{controller.SystemUUIDIndexKey: strings.ToUpper(uuid)})
 			if client.IgnoreNotFound(err) != nil {
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				return
@@ -124,7 +125,7 @@ func handleIPXE(w http.ResponseWriter, r *http.Request, k8sClient client.Client,
 	}
 
 	ipxeBootConfigList := &bootv1alpha1.IPXEBootConfigList{}
-	err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid})
+	err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{controller.SystemUUIDIndexKey: uuid})
 	if client.IgnoreNotFound(err) != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
@@ -183,7 +184,7 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 	ctx := r.Context()
 
 	ipxeBootConfigList := &bootv1alpha1.IPXEBootConfigList{}
-	if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid}); err != nil {
+	if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{controller.SystemUUIDIndexKey: uuid}); err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		log.Info("Failed to find IPXEBootConfig", "error", err.Error())
 		return
@@ -191,7 +192,7 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 
 	if len(ipxeBootConfigList.Items) == 0 {
 		//Some OSes standardizes SystemUUIDs to uppercase, which may cause mismatches.
-		if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToUpper(uuid)}); err != nil {
+		if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{controller.SystemUUIDIndexKey: strings.ToUpper(uuid)}); err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			log.Info("Failed to find IPXEBootConfig", "error", err.Error())
 			return
@@ -200,7 +201,7 @@ func handleIgnitionIPXEBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 
 	if len(ipxeBootConfigList.Items) == 0 {
 		//Some OSes standardizes SystemUUIDs to lowercase, which may cause mismatches.
-		if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToLower(uuid)}); err != nil {
+		if err := k8sClient.List(ctx, ipxeBootConfigList, client.MatchingFields{controller.SystemUUIDIndexKey: strings.ToLower(uuid)}); err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			log.Info("Failed to find IPXEBootConfig", "error", err.Error())
 			return
@@ -295,7 +296,7 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 	ctx := r.Context()
 
 	HTTPBootConfigList := &bootv1alpha1.HTTPBootConfigList{}
-	if err := k8sClient.List(ctx, HTTPBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: uuid}); err != nil {
+	if err := k8sClient.List(ctx, HTTPBootConfigList, client.MatchingFields{controller.SystemUUIDIndexKey: uuid}); err != nil {
 		http.Error(w, "Resource Not Found", http.StatusNotFound)
 		log.Info("Failed to find HTTPBootConfigList", "error", err.Error())
 		return
@@ -303,7 +304,7 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 
 	if len(HTTPBootConfigList.Items) == 0 {
 		//Some OSes standardizes SystemUUIDs to uppercase, which may cause mismatches.
-		if err := k8sClient.List(ctx, HTTPBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToUpper(uuid)}); err != nil {
+		if err := k8sClient.List(ctx, HTTPBootConfigList, client.MatchingFields{controller.SystemUUIDIndexKey: strings.ToUpper(uuid)}); err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			log.Info("Failed to find HTTPBootConfigList", "error", err.Error())
 			return
@@ -312,7 +313,7 @@ func handleIgnitionHTTPBoot(w http.ResponseWriter, r *http.Request, k8sClient cl
 
 	if len(HTTPBootConfigList.Items) == 0 {
 		//Some OSes standardizes SystemUUIDs to lowecase, which may cause mismatches.
-		if err := k8sClient.List(ctx, HTTPBootConfigList, client.MatchingFields{bootv1alpha1.SystemUUIDIndexKey: strings.ToLower(uuid)}); err != nil {
+		if err := k8sClient.List(ctx, HTTPBootConfigList, client.MatchingFields{controller.SystemUUIDIndexKey: strings.ToLower(uuid)}); err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			log.Info("Failed to find HTTPBootConfigList", "error", err.Error())
 			return
@@ -428,7 +429,7 @@ func handleHTTPBoot(
 
 	var httpBootConfigs bootv1alpha1.HTTPBootConfigList
 	for _, ip := range clientIPs {
-		if err := k8sClient.List(ctx, &httpBootConfigs, client.MatchingFields{bootv1alpha1.NetworkIdentifierIndexKey: ip}); err != nil {
+		if err := k8sClient.List(ctx, &httpBootConfigs, client.MatchingFields{controller.NetworkIdentifierIndexKey: ip}); err != nil {
 			log.Info("Failed to list HTTPBootConfig for IP", "IP", ip, "error", err)
 			continue
 		}

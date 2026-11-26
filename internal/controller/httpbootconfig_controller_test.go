@@ -4,68 +4,70 @@
 package controller
 
 import (
-	"context"
-
+	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	. "sigs.k8s.io/controller-runtime/pkg/envtest/komega"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	bootv1alpha1 "github.com/ironcore-dev/boot-operator/api/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe("HTTPBootConfig Controller", func() {
-	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+	ns := SetupTest()
 
-		ctx := context.Background()
-
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+	It("should become Ready when no ignition secret is referenced", func(ctx SpecContext) {
+		config := &bootv1alpha1.HTTPBootConfig{
+			Namespace:    ns.Name,
+			GenerateName: "test-",
+			Spec: bootv1alpha1.HTTPBootConfigSpec{
+				SystemUUID: "12345",
+				UKIURL:     "http://example.com/uki.efi",
+			},
 		}
-		httpbootconfig := &bootv1alpha1.HTTPBootConfig{}
+		Expect(k8sClient.Create(ctx, config)).To(Succeed())
 
-		BeforeEach(func() {
-			By("creating the custom resource for the Kind HTTPBootConfig")
-			err := k8sClient.Get(ctx, typeNamespacedName, httpbootconfig)
-			if err != nil && errors.IsNotFound(err) {
-				resource := &bootv1alpha1.HTTPBootConfig{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
-					// TODO(user): Specify other spec details if needed.
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
-			}
-		})
+		Eventually(Object(config)).Should(HaveField("Status.State", bootv1alpha1.HTTPBootConfigStateReady))
+	})
 
-		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &bootv1alpha1.HTTPBootConfig{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
+	It("should become Ready when the referenced ignition secret has ignition data", func(ctx SpecContext) {
+		secret := &corev1.Secret{
+			GenerateName: "ignition-", Namespace: ns.Name,
+			Data: map[string][]byte{bootv1alpha1.DefaultIgnitionKey: []byte("{}")},
+		}
+		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 
-			By("Cleanup the specific resource instance HTTPBootConfig")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &HTTPBootConfigReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+		config := &bootv1alpha1.HTTPBootConfig{
+			Namespace:    ns.Name,
+			GenerateName: "test-",
+			Spec: bootv1alpha1.HTTPBootConfigSpec{
+				SystemUUID:        "12345",
+				UKIURL:            "http://example.com/uki.efi",
+				IgnitionSecretRef: &corev1.LocalObjectReference{Name: secret.Name},
+			},
+		}
+		Expect(k8sClient.Create(ctx, config)).To(Succeed())
 
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
-		})
+		Eventually(Object(config)).Should(HaveField("Status.State", bootv1alpha1.HTTPBootConfigStateReady))
+	})
+
+	It("should become Error when the referenced ignition secret lacks ignition data", func(ctx SpecContext) {
+		secret := &corev1.Secret{
+			GenerateName: "ignition-", Namespace: ns.Name,
+			Data: map[string][]byte{"wrong-key": []byte("{}")},
+		}
+		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+
+		config := &bootv1alpha1.HTTPBootConfig{
+			Namespace:    ns.Name,
+			GenerateName: "test-",
+			Spec: bootv1alpha1.HTTPBootConfigSpec{
+				SystemUUID:        "12345",
+				UKIURL:            "http://example.com/uki.efi",
+				IgnitionSecretRef: &corev1.LocalObjectReference{Name: secret.Name},
+			},
+		}
+		Expect(k8sClient.Create(ctx, config)).To(Succeed())
+
+		Eventually(Object(config)).Should(HaveField("Status.State", bootv1alpha1.HTTPBootConfigStateError))
 	})
 })

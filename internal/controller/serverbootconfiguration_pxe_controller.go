@@ -30,7 +30,6 @@ import (
 	"github.com/ironcore-dev/boot-operator/internal/oci"
 	"github.com/ironcore-dev/boot-operator/internal/registry"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/go-logr/logr"
@@ -93,17 +92,30 @@ func (r *ServerBootConfigurationPXEReconciler) delete(_ context.Context, _ logr.
 func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, log logr.Logger, bootConfig *metalv1alpha1.ServerBootConfiguration) (ctrl.Result, error) {
 	log.V(1).Info("Reconciling ServerBootConfiguration")
 
-	systemUUID, err := r.getSystemUUIDFromBootConfig(ctx, bootConfig)
+	server, err := getServerFromConfig(ctx, r.Client, bootConfig)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get system UUID from BootConfig: %w", err)
+		return ctrl.Result{}, err
 	}
+	systemUUID := server.Spec.SystemUUID
 	log.V(1).Info("Got system UUID from BootConfig", "systemUUID", systemUUID)
 
-	systemIPs, err := r.getSystemIPFromBootConfig(ctx, bootConfig)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get system IP from BootConfig: %w", err)
-	}
+	systemIPs := ExtractServerIPs(server)
 	log.V(1).Info("Got system IP from BootConfig", "systemIPs", systemIPs)
+
+	if len(systemIPs) == 0 {
+		log.V(1).Info("Server has no IPs on the metal.ironcore.dev/ips annotation, marking Pending")
+		// Withdraw any previously-applied child so its stale IP-index entries no longer
+		// match clients at /ipxe. No-op when no child exists (initial missing-IP case).
+		child := &v1alpha1.IPXEBootConfig{Namespace: bootConfig.Namespace, Name: bootConfig.Name}
+		if err := r.Delete(ctx, child); client.IgnoreNotFound(err) != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to delete stale IPXE config: %w", err)
+		}
+		if err := PatchServerBootConfigPending(ctx, r.Client,
+			types.NamespacedName{Name: bootConfig.Name, Namespace: bootConfig.Namespace}); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to patch state to pending: %w", err)
+		}
+		return ctrl.Result{}, nil
+	}
 
 	kernelURL, initrdURL, squashFSURL, err := r.getImageDetailsFromConfig(ctx, log, bootConfig)
 	if err != nil {
@@ -116,14 +128,10 @@ func (r *ServerBootConfigurationPXEReconciler) reconcile(ctx context.Context, lo
 	log.V(1).Info("Extracted OS image layer details")
 
 	config := &v1alpha1.IPXEBootConfig{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "boot.ironcore.dev/v1alpha1",
-			Kind:       "IPXEBootConfig",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: bootConfig.Namespace,
-			Name:      bootConfig.Name,
-		},
+		APIVersion: "boot.ironcore.dev/v1alpha1",
+		Kind:       "IPXEBootConfig",
+		Namespace:  bootConfig.Namespace,
+		Name:       bootConfig.Name,
 		Spec: v1alpha1.IPXEBootConfigSpec{
 			SystemUUID:  systemUUID,
 			SystemIPs:   systemIPs,
@@ -169,8 +177,8 @@ func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx
 	switch config.Status.State {
 	case v1alpha1.IPXEBootConfigStateReady:
 		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStateReady
-		// Remove ImageValidation condition when transitioning to Ready
 		apimeta.RemoveStatusCondition(&bootConfig.Status.Conditions, "ImageValidation")
+		apimeta.RemoveStatusCondition(&bootConfig.Status.Conditions, "NetworkIdentifiersMissing")
 	case v1alpha1.IPXEBootConfigStateError:
 		bootConfig.Status.State = metalv1alpha1.ServerBootConfigurationStateError
 	}
@@ -180,24 +188,6 @@ func (r *ServerBootConfigurationPXEReconciler) patchConfigStateFromIPXEState(ctx
 	}
 
 	return r.Status().Patch(ctx, bootConfig, client.MergeFrom(bootConfigBase))
-}
-
-func (r *ServerBootConfigurationPXEReconciler) getSystemUUIDFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) (string, error) {
-	server := &metalv1alpha1.Server{}
-	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
-		return "", err
-	}
-
-	return server.Spec.SystemUUID, nil
-}
-
-func (r *ServerBootConfigurationPXEReconciler) getSystemIPFromBootConfig(ctx context.Context, config *metalv1alpha1.ServerBootConfiguration) ([]string, error) {
-	server := &metalv1alpha1.Server{}
-	if err := r.Get(ctx, client.ObjectKey{Name: config.Spec.ServerRef.Name}, server); err != nil {
-		return nil, err
-	}
-
-	return ExtractServerNetworkIDs(server, false), nil
 }
 
 func (r *ServerBootConfigurationPXEReconciler) getImageDetailsFromConfig(ctx context.Context, log logr.Logger, config *metalv1alpha1.ServerBootConfiguration) (string, string, string, error) {
@@ -272,6 +262,10 @@ func (r *ServerBootConfigurationPXEReconciler) enqueueServerBootConfigFromIgniti
 	return EnqueueServerBootConfigsReferencingSecret(ctx, r.Client, secret)
 }
 
+func (r *ServerBootConfigurationPXEReconciler) enqueueServerBootConfigFromServer(ctx context.Context, server client.Object) []reconcile.Request {
+	return EnqueueServerBootConfigsReferencingServer(ctx, r.Client, server)
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *ServerBootConfigurationPXEReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -280,6 +274,10 @@ func (r *ServerBootConfigurationPXEReconciler) SetupWithManager(mgr ctrl.Manager
 		Watches(
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.enqueueServerBootConfigFromIgnitionSecret),
+		).
+		Watches(
+			&metalv1alpha1.Server{},
+			handler.EnqueueRequestsFromMapFunc(r.enqueueServerBootConfigFromServer),
 		).
 		Complete(r)
 }
