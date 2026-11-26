@@ -11,10 +11,10 @@ jobs:
     if: contains(github.event.pull_request.labels.*.name, 'ok-to-test')
     steps:
       - name: Clone the code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v6.5.0
         with:
           go-version-file: go.mod
 

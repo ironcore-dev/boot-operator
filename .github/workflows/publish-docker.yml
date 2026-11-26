@@ -30,11 +30,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Check out repository
-      uses: actions/checkout@v7
+      uses: actions/checkout@v7.0.1
       with:
         ref: ${{ github.event.pull_request.head.sha }}
     - name: Collect metadata
-      uses: docker/metadata-action@v6
+      uses: docker/metadata-action@v6.2.0
       id: meta
       with:
         images: |
@@ -49,7 +49,7 @@ jobs:
         flavor: |
           latest=${{ github.ref == 'refs/heads/main' }}
     - name: Set up QEMU
-      uses: docker/setup-qemu-action@v4
+      uses: docker/setup-qemu-action@v4.4.0
       with:
         image: tonistiigi/binfmt:latest
         platforms: ${{ env.platforms }}
@@ -57,7 +57,7 @@ jobs:
       run: |
         docker context create builders
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v4
+      uses: docker/setup-buildx-action@v4.4.1
       timeout-minutes: 5
       with:
         version: latest
@@ -69,7 +69,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     - name: Build and push Docker image
-      uses: docker/build-push-action@v7
+      uses: docker/build-push-action@v7.4.0
       timeout-minutes: 10
       with:
         context: .
