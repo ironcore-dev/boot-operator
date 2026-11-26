@@ -22,7 +22,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Go
-        uses: actions/setup-go@v6.5.0
+        uses: actions/setup-go@v7.1.0
         with:
           go-version-file: go.mod
 

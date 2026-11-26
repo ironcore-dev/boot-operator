@@ -5,12 +5,12 @@ version: 'v0.0.3'
 workflows:
     '.github/workflows/check-codegen.yml':
         - 'actions/checkout@v7.0.1'
-        - 'actions/setup-go@v6.5.0'
+        - 'actions/setup-go@v7.1.0'
     '.github/workflows/create-release-branch.yml':
         - 'actions/checkout@v7.0.1'
     '.github/workflows/lint.yml':
         - 'actions/checkout@v7.0.1'
-        - 'actions/setup-go@v6.5.0'
+        - 'actions/setup-go@v7.1.0'
         - 'golangci/golangci-lint-action@v9.3.0'
     '.github/workflows/publish-chart.yml':
         - 'actions/checkout@v7.0.1'
@@ -35,13 +35,13 @@ workflows:
         - 'fsfe/reuse-action@v6.0.0'
     '.github/workflows/test-chart.yml':
         - 'actions/checkout@v7.0.1'
-        - 'actions/setup-go@v6.5.0'
+        - 'actions/setup-go@v7.1.0'
     '.github/workflows/test-e2e.yml':
         - 'actions/checkout@v7.0.1'
-        - 'actions/setup-go@v6.5.0'
+        - 'actions/setup-go@v7.1.0'
     '.github/workflows/test.yml':
         - 'actions/checkout@v7.0.1'
-        - 'actions/setup-go@v6.5.0'
+        - 'actions/setup-go@v7.1.0'
 dependencies:
     'actions/checkout@v7.0.1':
         ref: 'v7.0.1'
@@ -58,9 +58,9 @@ dependencies:
         commit: 'sha1-368f82528645a54fb793d4d04e342629a3f51346'
         owner_id: 44036562
         repo_id: 438112499
-    'actions/setup-go@v6.5.0':
-        ref: 'v6.5.0'
-        commit: 'sha1-924ae3a1cded613372ab5595356fb5720e22ba16'
+    'actions/setup-go@v7.1.0':
+        ref: 'v7.1.0'
+        commit: 'sha1-d8cbb8045d7f43706b9177cceb36c1f91a6644d5'
         owner_id: 44036562
         repo_id: 192624594
     'actions/setup-node@v7.1.0':
